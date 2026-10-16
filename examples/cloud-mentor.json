@@ -1,0 +1,17 @@
+{
+  "objective": "Improve support-request routing into the dataset's exact labels",
+  "mentor": {"kind": "openai", "model": "SELECT_FROM_MODEL_DISCOVERY"},
+  "student": {"kind": "ollama", "url": "http://127.0.0.1:11434", "model": "SELECT_AN_INSTALLED_MODEL"},
+  "attempts": 3,
+  "max_calls": 240,
+  "minutes": 30,
+  "memory_mb": 512,
+  "cloud": {
+    "authorized": false,
+    "data_sharing": false,
+    "budget_usd": "0",
+    "input_usd_per_million": "0",
+    "output_usd_per_million": "0",
+    "max_output_tokens": 2048
+  }
+}

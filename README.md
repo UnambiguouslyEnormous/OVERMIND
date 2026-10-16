@@ -2,7 +2,7 @@
 
 A native Linux AI apprenticeship laboratory with real, bounded experiments and evidence before promotion.
 
-**This is a working first vertical slice, not the completed long-term vision.** It trains a small CPU text classifier from real examples, saves its weights, compares a frozen candidate against its original student on held-out examples, and records why promotion passed or failed. Local LLM mentors can direct training hyperparameters or optimize another local LLM's classification prompt through actual inference APIs.
+**Phase 2 extends the working first vertical slice; this is not the completed long-term vision.** It trains a small CPU text classifier from real examples, saves its weights, compares a frozen candidate against its original student on held-out examples, and records why promotion passed or failed. Local LLMs or OpenAI/Anthropic cloud mentors can direct bounded experiments through actual inference APIs. Cloud mentors require explicit authorization and a configured budget. See the [Phase 2 configuration guide](docs/phase2.md).
 
 ## Run
 
@@ -54,7 +54,7 @@ Ollama and local OpenAI-compatible engines are supported through the same provid
 - Select **Ollama** and enter `http://127.0.0.1:11434` plus the exact installed model name. **Inspect connection** queries real model metadata, including architecture, quantization, capability, and license fields when the engine exposes them.
 - Select **Compatible API** for a local engine exposing `/v1/models` and `/v1/chat/completions`. Enter its root URL, such as `http://127.0.0.1:8080`, without `/v1`. Architecture inspection is limited to what the endpoint actually exposes.
 - For an LLM mentor with the CPU student, the mentor sees hardware, architecture, training examples, validation outcomes, and past validation summaries. It returns a bounded SGD learning rate and explanation. The worker executes actual training. The mentor can revise its recommendation every six epochs.
-- For an LLM student, select an LLM mentor. The mentor proposes up to three system prompts; real student inference is scored on validation examples. The best prompt is frozen and compared with the original generic classification prompt on the held-out split. Its artifact is labeled **prompt optimization**, with no claim of weight training.
+- For an LLM student, select a local or authorized cloud LLM mentor. The mentor chooses prompt optimization or retrieval augmentation across a configurable bounded candidate count; real student inference is scored on validation examples. The best prompt is frozen and compared with the original generic classification prompt on the held-out split. Its artifact records **prompt optimization** or **retrieval augmentation**, with no claim of weight training.
 - The same local model can fill both roles. Use separately named model versions in your engine if you need distinct LLM checkpoints. Saved OVERMIND classifier checkpoints can directly become subsequent students.
 
 Enable the explicit local dataset-sharing checkbox before dispatching text to an inference server through the desktop. CLI use of a provider configuration explicitly selects that dispatch. The test prompts are sent only to the student during final verification; answers and test cases are never included in mentor requests. A local server may itself be configured to proxy elsewhere: you are responsible for its deployment. Use engines that truly run locally.
@@ -75,7 +75,7 @@ Example configuration for an Ollama mentor and real classifier training:
 
 Save it as `config.json`, then run `./run.sh run --config config.json`. An LLM student uses the same provider object as the mentor. A classifier checkpoint uses `{"kind":"linear","checkpoint":"/absolute/path/candidate.json"}`. The snapshot is copied before training and never overwritten.
 
-**Paid/cloud requests, API keys, authenticated endpoints, and non-loopback hosts are disabled in this release.** There is no spending authorization path yet. Setting a budget does not unlock a remote provider. The transport rejects redirects, disables proxies, normalizes localhost to an IP literal, and restricts connections to loopback. Additional providers can implement the existing `inspect()` / `generate()` boundary, but must add an explicit authorization and conservative cost-reservation layer before enabling paid use.
+**OpenAI and Anthropic cloud mentors are now implemented**, with session/environment credentials, authenticated model discovery, explicit paid-use and cloud-sharing authorization, pre-dispatch cost reservations and usage tracking. Local inference transports remain loopback-only; cloud transport uses fixed official HTTPS hosts. No paid calls are made by default. See the [Phase 2 guide](docs/phase2.md) for setup, pricing assumptions, permission boundaries and unverified integrations.
 
 ## What the measurements mean
 
@@ -101,17 +101,17 @@ The test set is held out from optimization within each experiment. It is **not c
 - Training checkpoints pair weights with an epoch cursor in an atomic JSON file. SQLite records state and decisions. A crash can lose an unfinished epoch or uncompleted inference pair, which will be retried within remaining budgets. Final verification recovery never changes the selected candidate.
 - No file crawling, private-conversation collection, automatic uploads, generated-code execution, source editing, model rewriting, or shell tools are exposed to the mentor. Returned mentor commands are validated data in a fixed schema.
 - User datasets need an explicit license or permission declaration. This release uses only the supplied training split; it does not generate synthetic training data or assume model-provider outputs may be used for distillation. Licenses still require human review for actual intended use.
-- Local experiment text and snapshots are stored unencrypted. Use filesystem permissions/encryption as appropriate. There is no telemetry.
+- Local experiment text and snapshots are stored unencrypted. Use filesystem permissions/encryption as appropriate. There is no telemetry. Cloud mentoring sends only explicitly authorized objective/model/hardware and training/validation context. Unrelated previous experiment text is excluded from cloud context.
 
 ## Capability status
 
 | Status | Capability |
 | --- | --- |
 | Implemented and exercised | CPU SGD weight training, baseline and independent final evaluation, artifact hashes, promotion gating, saved student reuse, SQLite history, hard worker limits, pause/resume/stop, checkpoint recovery, CLI |
-| Implemented; live server still required | Local Ollama/compatible inspection and inference, LLM mentor-directed SGD, LLM-to-LLM prompt optimization; protocol/pipeline tests use clearly marked fixtures |
+| Implemented; live integrations still require external setup | OpenAI/Anthropic cloud mentor APIs, spending ledger, local model discovery/inspection/inference, LLM-directed SGD, prompt/retrieval optimization, saved-artifact inference; protocol/pipeline tests use clearly marked fixtures |
 | Implemented; graphical verification pending in restricted build environment | Native GTK desktop, configuration, local-sharing permission, live journal, resource summary, artifact viewer, classifier trial |
-| Future | LoRA/QLoRA/SFT for generative models, RAG, dataset discovery, permitted synthetic data/distillation, custom evaluators, paid/cloud providers with cost authorization, stronger external inference resource isolation, automatic model-server checkpoint export, source-change proposals with approval |
+| Future | LoRA/QLoRA/SFT for generative models, semantic/vector RAG, dataset discovery, permitted synthetic data/distillation, custom evaluators, stronger external inference resource isolation, automatic model-server checkpoint export, source-change proposals with approval |
 
 No LoRA job has been run or claimed. The NVIDIA driver was unavailable during development, so the application selected CPU training. Ollama GGUF inference artifacts are not assumed to be trainable Transformer checkpoints. Future LoRA support must use compatible original model weights, verified licenses, and hardware preflight, and preserve the original weights.
 
-See [architecture](docs/architecture.md), [verification evidence](docs/verification.md), and [data license](DATA_LICENSE.md).
+See the [Phase 2 guide](docs/phase2.md), [Phase 2 verification](docs/phase2-verification.md), [architecture](docs/architecture.md), [verification evidence](docs/verification.md), and [data license](DATA_LICENSE.md).

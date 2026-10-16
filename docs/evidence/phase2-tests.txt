@@ -1,0 +1,41 @@
+test_artifact_load_rejects_nonfinite_or_wrong_weights (test_lab.LabTests.test_artifact_load_rejects_nonfinite_or_wrong_weights) ... ok
+test_call_budget_is_reserved_before_dispatch (test_lab.LabTests.test_call_budget_is_reserved_before_dispatch) ... ok
+test_config_limits (test_lab.LabTests.test_config_limits) ... ok
+test_data_leakage_and_license_validation (test_lab.LabTests.test_data_leakage_and_license_validation) ... ok
+test_epoch_checkpoint_cursor_recovers_consistently (test_lab.LabTests.test_epoch_checkpoint_cursor_recovers_consistently) ... ok
+test_existing_checkpoint_is_snapshotted_and_used_for_baseline (test_lab.LabTests.test_existing_checkpoint_is_snapshotted_and_used_for_baseline) ... ok
+test_mentor_commands_are_validated_never_executed (test_lab.LabTests.test_mentor_commands_are_validated_never_executed) ... ok
+test_no_remote_redirects_or_paid_access (test_lab.LabTests.test_no_remote_redirects_or_paid_access) ... ok
+test_pause_resume_stop_worker (test_lab.LabTests.test_pause_resume_stop_worker) ... ok
+test_promotion_rejects_ties_regressions_and_small_evidence (test_lab.LabTests.test_promotion_rejects_ties_regressions_and_small_evidence) ... ok
+test_prompt_pipeline_is_separate_from_weight_training (test_lab.LabTests.test_prompt_pipeline_is_separate_from_weight_training) ... ok
+test_provider_wire_formats_and_no_redirects (test_lab.LabTests.test_provider_wire_formats_and_no_redirects) ... ok
+test_real_weights_and_independent_final_evidence (test_lab.LabTests.test_real_weights_and_independent_final_evidence) ... ok
+test_test_answers_never_enter_mentor_context (test_lab.LabTests.test_test_answers_never_enter_mentor_context) ... ok
+test_validation_selected_candidate_frozen_on_recovery (test_lab.LabTests.test_validation_selected_candidate_frozen_on_recovery) ... ok
+test_wall_budget_and_stop_guard (test_lab.LabTests.test_wall_budget_and_stop_guard) ... ok
+test_worker_subprocess_real_memory_bounded_run (test_lab.LabTests.test_worker_subprocess_real_memory_bounded_run) ... ok
+test_anthropic_model_discovery_paginates (test_phase2.Phase2Tests.test_anthropic_model_discovery_paginates) ... ok
+test_authorization_data_consent_rates_and_role_required (test_phase2.Phase2Tests.test_authorization_data_consent_rates_and_role_required) ... ok
+test_both_cloud_mentors_control_actual_pipeline_with_protocol_fixtures (test_phase2.Phase2Tests.test_both_cloud_mentors_control_actual_pipeline_with_protocol_fixtures) ... ok
+test_cloud_errors_do_not_echo_provider_bodies_or_keys (test_phase2.Phase2Tests.test_cloud_errors_do_not_echo_provider_bodies_or_keys) ... ok
+test_digest_change_aborts_final_comparison (test_phase2.Phase2Tests.test_digest_change_aborts_final_comparison) ... ok
+test_direct_cloud_generation_cannot_bypass_ledger (test_phase2.Phase2Tests.test_direct_cloud_generation_cannot_bypass_ledger) ... ok
+test_large_validation_context_is_bounded (test_phase2.Phase2Tests.test_large_validation_context_is_bounded) ... ok
+test_manual_prompt_inference_is_local_only_and_explicit (test_phase2.Phase2Tests.test_manual_prompt_inference_is_local_only_and_explicit) ... ok
+test_metadata_discovery_has_no_generation (test_phase2.Phase2Tests.test_metadata_discovery_has_no_generation) ... ok
+test_missing_usage_and_truncated_output_never_fake_success (test_phase2.Phase2Tests.test_missing_usage_and_truncated_output_never_fake_success) ... ok
+test_official_https_headers_payload_and_usage (test_phase2.Phase2Tests.test_official_https_headers_payload_and_usage) ... ok
+test_ollama_discovery_and_missing_dependencies (test_phase2.Phase2Tests.test_ollama_discovery_and_missing_dependencies) ... ok
+test_reservation_reconciliation_and_budget_block_before_call (test_phase2.Phase2Tests.test_reservation_reconciliation_and_budget_block_before_call) ... ok
+test_reserved_cost_survives_interruption_and_blocks_new_dispatch (test_phase2.Phase2Tests.test_reserved_cost_survives_interruption_and_blocks_new_dispatch) ... ok
+test_retrieval_uses_only_frozen_training_examples (test_phase2.Phase2Tests.test_retrieval_uses_only_frozen_training_examples) ... ok
+test_schema_migration_preserves_existing_run_rows (test_phase2.Phase2Tests.test_schema_migration_preserves_existing_run_rows) ... ok
+test_session_credentials_only_selected_provider_in_child (test_phase2.Phase2Tests.test_session_credentials_only_selected_provider_in_child) ... ok
+test_timeout_keeps_full_reservation_after_reopening_store (test_phase2.Phase2Tests.test_timeout_keeps_full_reservation_after_reopening_store) ... ok
+test_token_overrun_latches_cloud_dispatch_closed (test_phase2.Phase2Tests.test_token_overrun_latches_cloud_dispatch_closed) ... ok
+
+----------------------------------------------------------------------
+Ran 36 tests in 69.692s
+
+OK

@@ -12,6 +12,8 @@ from .hardware import inspect
 from .lab import Manager, DEFAULTS, config_checked
 from .model import TextStudent
 from .providers import provider
+from .security import register, redact
+from .ollama import discover
 
 CSS = b'''
 * { font-family: "Inter", "DejaVu Sans", sans-serif; font-size: 13px; }
@@ -74,7 +76,7 @@ class Desktop(Gtk.Window):
         css=Gtk.CssProvider();css.load_from_data(CSS)
         Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(),css,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         header=Gtk.HeaderBar();header.set_show_close_button(True);header.set_title('OVERMIND')
-        header.set_subtitle('AI APPRENTICESHIP LABORATORY  /  0.1')
+        header.set_subtitle('AI APPRENTICESHIP LABORATORY  /  0.2')
         self.hardware_label=label('Detecting hardware…','subtitle');header.pack_end(self.hardware_label)
         self.set_titlebar(header)
         layout=box(0,True);self.add(layout)
@@ -85,7 +87,7 @@ class Desktop(Gtk.Window):
         side.pack_start(label('EXPERIMENT MEMORY','eyebrow'),False,False,8)
         self.history=Gtk.ListBox();self.history.set_selection_mode(Gtk.SelectionMode.SINGLE);self.history.connect('row-selected',self.history_selected)
         side.pack_start(scroll(self.history),True,True,0)
-        side.pack_start(label('LOCAL BY DEFAULT\nPaid API calls disabled\nNo automatic file uploads','subtitle'),False,False,0)
+        side.pack_start(label('LOCAL STUDENT\nCloud mentor requires consent\nNo automatic file uploads','subtitle'),False,False,0)
         side.pack_start(label(str(self.store.root),'subtitle',True),False,False,0)
         self.tabs=Gtk.Notebook();layout.pack_start(self.tabs,True,True,0)
         self.setup_tab();self.live_tab();self.evidence_tab()
@@ -115,19 +117,34 @@ class Desktop(Gtk.Window):
             roles.pack_start(card,True,True,0)
             combo=Gtk.ComboBoxText()
             combo.append('controller' if role=='mentor' else 'linear','Curriculum controller · deterministic' if role=='mentor' else 'CPU text classifier · real weight training')
+            if role=='mentor':
+                combo.append('openai','OpenAI · cloud mentor');combo.append('anthropic','Anthropic · cloud mentor')
             combo.append('ollama','Ollama · local LLM');combo.append('compatible','Compatible API · local LLM');combo.set_active(0)
             card.pack_start(combo,False,False,0)
-            url=entry('http://127.0.0.1:11434');model=entry('');model.set_placeholder_text('Model name, e.g. qwen3:0.6b')
+            url=entry('http://127.0.0.1:11434');model=Gtk.ComboBoxText.new_with_entry();model.get_child().set_placeholder_text('Discover models or enter an exact ID')
             card.pack_start(url,False,False,0);card.pack_start(model,False,False,0)
+            if role=='mentor':
+                self.api_key=entry();self.api_key.set_visibility(False);self.api_key.set_placeholder_text('Session API key; blank uses provider environment variable')
+                self.api_key.set_input_purpose(Gtk.InputPurpose.PASSWORD)
+                self.api_key.set_no_show_all(True);card.pack_start(self.api_key,False,False,0)
+            card.pack_start(button('Discover models',lambda r=role:self.discover_models(r)),False,False,0)
+            if role=='student':card.pack_start(button('Test local inference',self.test_student),False,False,0)
             check=button('Inspect connection',lambda r=role:self.check_connection(r));card.pack_start(check,False,False,0)
             info=label('Built-in; no external server required.','subtitle',True);card.pack_start(info,False,False,0)
             self.role_widgets[role]=(combo,url,model,info,check)
             def changed(w,r=role):
                 combo,url,model,info,check=self.role_widgets[r]
+                if r=='mentor':self.invalidate_cloud_authorization()
                 external=combo.get_active_id() not in ('controller','linear')
-                url.set_sensitive(external);model.set_sensitive(external);check.set_sensitive(external)
+                cloud=combo.get_active_id() in ('openai','anthropic')
+                url.set_sensitive(external and not cloud);model.set_sensitive(external);check.set_sensitive(external)
+                if r=='mentor':
+                    self.api_key.set_visible(cloud);self.api_key.set_text('')
+                if cloud:
+                    info.set_text('Official HTTPS endpoint. Discover/inspect checks metadata only; paid generation requires the authorization below.');return
                 info.set_text('Loopback only. Server and model must already be installed.' if external else
                     'Bounded algorithm; this is not an LLM mentor.' if r=='mentor' else '8,192 trainable weights · text classification only.')
+            if role=='mentor':model.get_child().connect('changed',lambda _:self.invalidate_cloud_authorization())
             combo.connect('changed',changed);changed(combo)
         checkpoint_row=box(8,True)
         checkpoint_row.pack_start(button('Use saved student weights…',self.choose_checkpoint),False,False,0)
@@ -146,8 +163,19 @@ class Desktop(Gtk.Window):
         for col,(key,title,low,high) in enumerate([('epochs','Training epochs',1,60),('minutes','Wall minutes',1,120),('max_calls','LLM call limit',1,2000),('memory_mb','Worker RAM · MB',128,16384)]):
             spin=Gtk.SpinButton.new_with_range(low,high,1);spin.set_value(DEFAULTS[key]);spin.set_hexpand(True)
             grid.attach(label(title,'subtitle'),col,0,1,1);grid.attach(spin,col,1,1,1);self.spins[key]=spin
-        limits.pack_start(label('Prompt mode: up to 3 mentor candidates. $0 cloud spending; no remote endpoints are enabled.','subtitle',True),False,False,0)
+        limits.pack_start(label('LLM mode: bounded mentor candidates choose prompt or retrieval improvements. Student inference remains local.','subtitle',True),False,False,0)
         c.pack_start(limits,False,False,0)
+        attempts_row=box(10,True);attempts_row.pack_start(label('Maximum mentor candidates','subtitle'),False,False,0)
+        self.attempts=Gtk.SpinButton.new_with_range(1,8,1);self.attempts.set_value(3);attempts_row.pack_start(self.attempts,False,False,0);limits.pack_start(attempts_row,False,False,0)
+        cloud_card=self.card('CLOUD MENTOR SPENDING','Enter upper-bound rates from your provider’s current pricing for the exact model. Zero defaults block paid usage. Uncertain requests retain their full reservation.')
+        cloud_grid=Gtk.Grid(column_spacing=12,row_spacing=8);self.cloud_fields={}
+        for col,(key,title,default) in enumerate([('budget_usd','Run budget · USD','0'),('input_usd_per_million','Input · USD / 1M','0'),('output_usd_per_million','Output · USD / 1M','0'),('max_output_tokens','Output token cap','2048')]):
+            w=entry(default);w.set_width_chars(10);w.set_hexpand(True);self.cloud_fields[key]=w
+            cloud_grid.attach(label(title,'subtitle'),col,0,1,1);cloud_grid.attach(w,col,1,1,1)
+        cloud_card.pack_start(cloud_grid,False,False,0)
+        self.cloud_authorized=Gtk.CheckButton(label='Authorize paid mentor calls for this run within the configured budget.')
+        self.cloud_sharing=Gtk.CheckButton(label='Allow this objective, hardware/model details, and training/validation data to be sent to the cloud mentor.')
+        cloud_card.pack_start(self.cloud_authorized,False,False,0);cloud_card.pack_start(self.cloud_sharing,False,False,0);c.pack_start(cloud_card,False,False,0)
         self.consent=Gtk.CheckButton(label='Allow the selected dataset’s training and validation text to be sent to my local model server.')
         self.consent.set_active(False);c.pack_start(self.consent,False,False,0)
         row=box(12,True);self.run_button=button('RUN EXPERIMENT  →',self.run_new,'primary');row.pack_start(self.run_button,False,False,0)
@@ -177,7 +205,7 @@ class Desktop(Gtk.Window):
         self.verification=label('No completed comparison yet. Improvement is never assumed.','subtitle',True);c.pack_start(self.verification,False,False,0)
         self.artifact_label=label('Candidates, dataset snapshots, raw predictions and reports are saved locally.','subtitle',True);c.pack_start(self.artifact_label,False,False,0)
         self.artifact_choice=Gtk.ComboBoxText()
-        for name in ('report.json','candidate.json','baseline-validation.json','latest-validation.json','baseline-test.json','candidate-test.json','promoted.json'):
+        for name in ('report.json','candidate.json','baseline-validation.json','latest-validation.json','baseline-test.json','candidate-test.json','promoted.json','billing.json'):
             self.artifact_choice.append_text(name)
         self.artifact_choice.set_active(0);self.artifact_choice.connect('changed',lambda _:self.show_artifact())
         c.pack_start(self.artifact_choice,False,False,0)
@@ -188,10 +216,18 @@ class Desktop(Gtk.Window):
         trial.pack_start(button('Classify with candidate',self.try_candidate),False,False,0)
         self.try_result=label('—','subtitle',True);trial.pack_start(self.try_result,False,False,0);c.pack_start(trial,False,False,0)
 
+    def invalidate_cloud_authorization(self):
+        if hasattr(self,'cloud_authorized'):
+            self.cloud_authorized.set_active(False);self.cloud_sharing.set_active(False)
+            for field in ('input_usd_per_million','output_usd_per_million'):self.cloud_fields[field].set_text('0')
+
     def role_config(self,role):
         combo,url,model,_,_=self.role_widgets[role]
         kind=combo.get_active_id()
-        return ({'kind':kind,**({'checkpoint':self.checkpoint_path} if kind=='linear' and self.checkpoint_path else {})}) if kind in ('linear','controller') else {'kind':kind,'url':url.get_text().strip(),'model':model.get_text().strip()}
+        if kind in ('openai','anthropic'):
+            if self.api_key.get_text():register(kind,self.api_key.get_text())
+            return {'kind':kind,'model':model.get_child().get_text().strip()}
+        return ({'kind':kind,**({'checkpoint':self.checkpoint_path} if kind=='linear' and self.checkpoint_path else {})}) if kind in ('linear','controller') else {'kind':kind,'url':url.get_text().strip(),'model':model.get_child().get_text().strip()}
 
     def message(self,text):
         self.status.set_text(text)
@@ -199,7 +235,7 @@ class Desktop(Gtk.Window):
     def background(self,work,done):
         def task():
             try: result=work();error=None
-            except Exception as e:result=None;error=str(e)
+            except Exception as e:result=None;error=redact(str(e))
             GLib.idle_add(done,result,error)
         threading.Thread(target=task,daemon=True).start()
 
@@ -210,6 +246,38 @@ class Desktop(Gtk.Window):
         def done(result,error):
             self.role_widgets[role][3].set_text(error or json.dumps(result,ensure_ascii=False)[:850])
         self.background(p.inspect,done)
+
+    def discover_models(self,role):
+        combo,url,model,info,_=self.role_widgets[role];kind=combo.get_active_id()
+        if kind in ('linear','controller'):info.set_text('Built-in role; no discovery required.');return
+        if kind in ('openai','anthropic'):
+            if self.api_key.get_text():register(kind,self.api_key.get_text())
+            from .cloud import CloudProvider
+            work=CloudProvider(kind,'discovery').models
+        elif kind=='ollama':work=lambda:discover(url.get_text().strip())
+        else:
+            try:work=provider({'kind':kind,'url':url.get_text().strip(),'model':'discovery'}).models
+            except Exception as e:info.set_text(str(e));return
+        info.set_text('Discovering models…')
+        def done(result,error):
+            if error:info.set_text(error);return
+            if combo.get_active_id()!=kind:return
+            current=model.get_child().get_text();model.remove_all()
+            ids=[x['name'] for x in result.get('models',[]) if 'name' in x] if isinstance(result,dict) else result
+            for name in ids:model.append_text(name)
+            if current:model.get_child().set_text(current)
+            elif ids:model.set_active(0)
+            info.set_text(result['guidance'] if isinstance(result,dict) else f'{len(ids)} models accessible. Select a text-generation model; metadata discovery does not test generation.')
+        self.background(work,done)
+
+    def test_student(self):
+        try:
+            cfg=self.role_config('student')
+            if cfg['kind'] not in ('ollama','compatible'):raise ValueError('Select a local LLM first.')
+            p=provider(cfg)
+        except Exception as e:self.role_widgets['student'][3].set_text(str(e));return
+        self.role_widgets['student'][3].set_text('Testing local generation…')
+        self.background(lambda:p.generate('Reply briefly.','Say ready.',16),lambda r,e:self.role_widgets['student'][3].set_text(e or 'Local inference succeeded: '+r[:160]))
 
     def choose_dataset(self):
         dialog=Gtk.FileChooserDialog(title='Select licensed dataset JSON',parent=self,action=Gtk.FileChooserAction.OPEN)
@@ -244,7 +312,12 @@ class Desktop(Gtk.Window):
         try:
             if self.manager.process and self.manager.process.poll() is None: raise ValueError('An experiment is active. Pause or stop it before creating another.')
             c={**DEFAULTS,'objective':self.objective.get_text().strip(),'mentor':self.role_config('mentor'),'student':self.role_config('student'),
+                'attempts':self.attempts.get_value_as_int(),
                 **{key:spin.get_value_as_int() for key,spin in self.spins.items()}}
+            if c['mentor']['kind'] in ('openai','anthropic'):
+                c['cloud']={key:w.get_text().strip() for key,w in self.cloud_fields.items()}
+                c['cloud']['max_output_tokens']=int(c['cloud']['max_output_tokens'])
+                c['cloud'].update(authorized=self.cloud_authorized.get_active(),data_sharing=self.cloud_sharing.get_active())
             if (c['mentor']['kind']!='controller' or c['student']['kind']!='linear') and not self.consent.get_active():
                 raise ValueError('Enable the local dataset-sharing permission before connecting an external model server.')
             c=config_checked(c);dataset=load(self.dataset_path)
@@ -285,8 +358,10 @@ class Desktop(Gtk.Window):
         if not self.selected:return
         run=self.store.get(self.selected);s=run['state'];cfg=run['config'];report=s.get('report')
         self.run_title.set_text('Experiment '+self.selected)
-        method='Weight training · CPU softmax classifier' if cfg['student']['kind']=='linear' else 'Prompt optimization · base weights unchanged'
-        self.run_detail.set_text(f'{cfg["objective"]}\n{method}  ·  phase: {s["phase"]}  ·  calls reserved: {s["calls"]}/{cfg["max_calls"]}')
+        method='Weight training · CPU softmax classifier' if cfg['student']['kind']=='linear' else 'Prompt / retrieval optimization · base weights unchanged'
+        bill=self.store.billing(self.selected)
+        spending=(f' · cloud ${bill["charged_or_reserved_usd"]:.6f} / ${cfg["cloud"]["budget_usd"]} · tokens {bill["input_tokens"]} in / {bill["output_tokens"]} out · uncertain {bill["uncertain_calls"]}') if cfg.get('cloud') else ''
+        self.run_detail.set_text(f'{cfg["objective"]}\n{method}  ·  phase: {s["phase"]}  ·  calls reserved: {s["calls"]}/{cfg["max_calls"]}'+spending)
         self.metrics['status'].set_text(run['status'].capitalize())
         self.metrics['baseline'].set_text(f'{report["baseline_accuracy"]:.1%}' if report else f'{s["baseline_validation"]:.1%} val' if 'baseline_validation' in s else '—')
         self.metrics['candidate'].set_text(f'{report["candidate_accuracy"]:.1%}' if report else f'{s["best_validation"]:.1%} val' if s.get('best_validation',-1)>=0 else '—')
@@ -322,8 +397,9 @@ class Desktop(Gtk.Window):
             if not 0<len(text)<=4000:raise ValueError('Enter 1–4000 characters.')
             if artifact['format']=='overmind.softmax.v1':self.try_result.set_text(TextStudent.restore(artifact).predict(text))
             else:
-                # Inference outside experiments would bypass their request budget; use CLI with explicit cap instead.
-                self.try_result.set_text('Interactive prompt inference is not enabled here. The saved system_prompt can be used with the configured local engine.')
+                from .inference import predict_artifact
+                self.try_result.set_text('Running one local inference; this manual trial does not affect evaluation scores…')
+                self.background(lambda:predict_artifact(artifact,text,allow_local=True),lambda result,error:self.try_result.set_text(error or result))
         except Exception as e:self.try_result.set_text(str(e))
 
     def close(self,*_):

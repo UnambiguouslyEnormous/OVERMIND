@@ -1,5 +1,5 @@
 """Provider boundary: local Ollama and local OpenAI-compatible engines, interchangeable roles.
-No commercial SDK dependency and no remote network or paid requests in v0.1.
+Cloud mentors use a separate official-endpoint transport and experiment spending ledger.
 """
 import ipaddress
 import json
@@ -37,10 +37,16 @@ class LocalProvider:
             if len(raw)>2_000_000: raise ValueError('Provider response exceeds 2 MB.')
             return json.loads(raw)
 
+    def models(self):
+        r=self.request('/api/tags' if self.kind=='ollama' else '/v1/models')
+        return sorted({x['name'] for x in r.get('models',[])}) if self.kind=='ollama' else sorted({x['id'] for x in r.get('data',[])})
+
     def inspect(self):
         if self.kind == 'ollama':
             r = self.request('/api/show',{'model':self.model})
-            return {k:r.get(k) for k in ('details','model_info','capabilities','license')}
+            tags=self.request('/api/tags')
+            identity=next((x for x in tags.get('models',[]) if x.get('name') in (self.model,self.model+':latest') or x.get('model') in (self.model,self.model+':latest')),{})
+            return {**{k:r.get(k) for k in ('details','model_info','capabilities','license')},'identity':identity}
         r = self.request('/v1/models')
         ids = [x['id'] for x in r.get('data',[])]
         if self.model not in ids: raise ValueError(f'Model not listed by endpoint. Available: {ids}')
@@ -59,6 +65,9 @@ class LocalProvider:
         return answer
 
 def provider(config):
+    if config['kind'] in ('openai','anthropic'):
+        from .cloud import CloudProvider
+        return CloudProvider(config['kind'],config['model'])
     return LocalProvider(config['kind'],config['url'],config['model'])
 
 def json_reply(text):
