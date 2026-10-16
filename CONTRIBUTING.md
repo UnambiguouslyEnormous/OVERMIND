@@ -15,4 +15,4 @@ git config --local core.hooksPath .githooks
 python3 -B -m overmind.secret_scan --staged
 ```
 
-See [setup](README.md#run) and [scanner limitations](docs/security-hardening.md). Review the actual diff as well: pattern scanning cannot detect every secret or personal detail. Include the test result in the PR and identify any live integration or desktop checks that were not performed. Contributions are offered under the project's MIT license; the benchmark's CC0 and external dependency/model/data licenses remain separate.
+See [setup](README.md#run) and [scanner limitations](docs/security.md). Review the actual diff as well: pattern scanning cannot detect every secret or personal detail. Include the test result in the PR and identify any live integration or desktop checks that were not performed. Contributions are offered under the project's MIT license; the benchmark's CC0 and external dependency/model/data licenses remain separate.

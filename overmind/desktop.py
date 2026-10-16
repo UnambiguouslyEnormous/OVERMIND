@@ -7,6 +7,7 @@ import gi
 gi.require_version('Gtk','3.0')
 from gi.repository import Gtk, Gdk, GLib
 
+from . import DISPLAY_VERSION
 from .data import load
 from .hardware import inspect
 from .lab import Manager, DEFAULTS, config_checked
@@ -76,7 +77,7 @@ class Desktop(Gtk.Window):
         css=Gtk.CssProvider();css.load_from_data(CSS)
         Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(),css,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         header=Gtk.HeaderBar();header.set_show_close_button(True);header.set_title('OVERMIND')
-        header.set_subtitle('AI APPRENTICESHIP LABORATORY  /  0.2')
+        header.set_subtitle(f'AI APPRENTICESHIP LABORATORY  /  {DISPLAY_VERSION}')
         self.hardware_label=label('Detecting hardware…','subtitle');header.pack_end(self.hardware_label)
         self.set_titlebar(header)
         layout=box(0,True);self.add(layout)

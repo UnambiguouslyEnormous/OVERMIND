@@ -1,31 +1,36 @@
-# Minimal Linux beta verification
+# Beta readiness: v0.2.0-beta.1
 
-Release preparation on 2026-10-15. This is a source-checkout beta, not a packaged installer. No repository publication, commit, push, history rewrite, paid API request or model download was performed.
+This is a Linux source-checkout beta targeting Ubuntu 24.04 and compatible Pop!_OS installations. No other distribution is claimed as tested. There is no packaged installer. See [installation](installation.md) and the [user guide](user-guide.md).
 
-## Changes and verification
+| Purpose | Version |
+| --- | --- |
+| README and desktop display | `v0.2.0-beta.1` |
+| Python package and `overmind.__version__` | `0.2.0b1` |
+| Intended GitHub release tag (not created) | `v0.2.0-beta.1` |
 
-- Permission migration now recognizes ownership before changing anything: a valid OVERMIND marker or the original `runs` and `events` SQLite schemas, with only laboratory entries at the root. New/empty dedicated directories are initialized with a private marker. The entire tree is checked before migration. Unrelated roots, invalid databases/markers, source/home/filesystem roots, symlink traversal, hardlinks and special files are rejected. Existing private experiment contents are not rewritten. The real saved laboratory passed a read-only recognition check; migration preservation is tested on temporary copies/fixtures.
-- The machine-specific `.desktop` shortcut was removed. Existing `run.sh` is the portable source-checkout launcher; installation/startup instructions are in [README](../README.md#run).
-- Public evidence consists of allowlisted [Qwen prompt](../examples/qwen-prompt-result.json) and [SGD classifier](../examples/classifier-result.json) summaries. Qwen's saved candidate and dataset hashes were checked against its report. Private configuration, raw prompts, databases, local paths and logs remain excluded. Earlier documentation links to ignored private artifacts were removed. The existing benchmark CC0 notice is unchanged; application code now has the requested MIT license.
-- Full automated suite: **95 tests passed in 187.981 seconds**, including all 84 previous tests and 11 migration regressions. A final focused run passed **12 migration tests in 3.704 seconds**, including an additional FIFO/special-file regression added after the full run. All 96 current tests were therefore exercised across these runs. Cloud tests use mocks and synthetic credentials.
-- Tracked-snapshot and reachable-history secret checks passed. A separate scan of current tracked/new working files found no matching secret patterns. These checks are not proof that arbitrary private data is absent; review staged changes before committing.
-- A clean source copy containing only release-visible files was placed in a new path containing spaces, without `.git`, existing lab data or private configuration. From outside the checkout, its launcher passed help, hardware inspection, a full CPU classifier experiment, laboratory reopen/list, and saved-weight prediction (`billing`). The fresh experiment completed and promoted **10/40 → 37/40** held-out accuracy. No pip dependencies or network were needed.
-- GTK launch was attempted from that copy and failed because the restricted environment could not initialize its display. No successful graphical launch is claimed. The copy used the already installed system Python/GTK; it was not a fresh OS dependency installation.
+## Verified checks
+
+The beta preparation began from synchronized sanitized `main` at `9636fff3323fffcbc4f687c7b007b0432066d7da`. The recorded full offline suite passed **96 tests in 144.509 seconds**. Coverage includes actual CPU training, independent evaluation, lifecycle/recovery, provider protocol fixtures, bounded proposal corrections, spending authorization/accounting, credential isolation/redaction, and data migration rejection/preservation. Provider fixtures use synthetic credentials, not paid inference.
+
+CLI help and installed GTK 3 bindings passed. A fresh temporary laboratory completed a CPU experiment, reopened through `list` and `show`, and predicted `billing` from saved classifier weights. A clean-source launcher check also worked from outside a checkout whose path contained spaces; its classifier comparison reproduced 10/40 → 37/40. The [experiment record](experiments.md#verified-results) preserves both the CPU result and the separate live Qwen prompt result.
+
+Tracked-snapshot/history secret checks and a scan of proposed working files passed during preparation; these pattern checks do not prove that all sensitive content is absent. Existing experiment contents and history/billing rows were preserved during permission hardening, and later source changes were checked against file-preservation snapshots.
+
+Four real screenshots are included in the [README](../README.md#screenshots). Visual privacy review found no exposed credentials or identifying paths; personal path prefixes are masked, leaving a generic directory suffix in Evidence. PNG checks found no embedded text/EXIF metadata or trailing data; the inspected Evidence redactions are opaque. Screenshot bytes were preserved when renamed. Some captures retain older version labels.
 
 ## Remaining checks before public beta
 
-1. On a normal supported Linux desktop, follow the README from a fresh checkout and verify dependency installation, window startup, the built-in CPU experiment, evidence display, pause/resume/stop and reopening saved data. This is the remaining desktop release acceptance check; it cannot be completed in the restricted display environment.
-2. Review the final staged diff and run `python3 -B -m overmind.secret_scan --staged` before the owner's commit. Include only source/docs and sanitized example summaries; never force-add private `lab-data/`, raw `docs/evidence/`, environment files or local configurations. Publishing is a separate owner action.
+1. On a normal supported desktop, follow installation from a fresh checkout. Verify dependency installation, startup, a built-in CPU experiment, evidence display, pause/resume/stop, and reopening saved data. Earlier restricted-environment launches could not initialize a display; supplied screenshots do not establish this entire acceptance checklist. A fresh OS dependency installation has not been tested.
+2. Review the complete source/documentation diff and screenshots. Before the owner's commit, stage only intended public files and run `python3 -B -m overmind.secret_scan --staged`. Keep private laboratories, raw logs, credentials, and local configurations excluded.
 
-No additional model-training backend is required for this explicitly limited beta. Generative-model LoRA/QLoRA/SFT, general intelligence training, multi-task/automatic continual learning and vector retrieval are unimplemented. Lexical retrieval and Anthropic orchestration have fixture coverage, not a published live gain. GPU/other model combinations are not certified. An optional live rerun requires separately installed Ollama/model, explicit sharing/paid-use authorization and configured limits; it is not necessary to test the default CPU path. Never reuse the small benchmark as fresh statistical confirmation.
+Additional live provider/model tests require separately installed engines/models, explicit sharing/paid-use grants, and configured limits. They are optional for the default CPU path. No broad provider, GPU, distribution, or general-capability certification is implied. [Capability limits](experiments.md#capability-status) and [security boundaries](security.md#limitations) remain part of the beta's scope.
 
-To repeat offline checks:
+## Repeat offline checks
 
 ```bash
 python3 -B -m unittest discover -s tests -v
 python3 -B -m overmind.secret_scan --tracked
 python3 -B -m overmind.secret_scan --history
-./run.sh --data /tmp/overmind-new-lab run
 ```
 
-Choose a new/empty directory for the last command. Permission migration assumes exclusive, trusted ownership during opening; it is not a defense against another process maliciously swapping filesystem entries during preflight/migration. Private permissions are not encryption. See [security boundaries](security-hardening.md).
+Use temporary data for smoke tests and retain backups of existing laboratories. Publishing, tagging, and release creation require separate owner action; this preparation does not perform them.
