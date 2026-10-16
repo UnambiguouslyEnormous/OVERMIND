@@ -1,0 +1,11 @@
+[project]
+name = "overmind-lab"
+version = "0.1.0"
+description = "A local, verifiable AI apprenticeship laboratory"
+requires-python = ">=3.12"
+
+[project.scripts]
+overmind = "overmind.__main__:main"
+
+[tool.setuptools.package-data]
+overmind = ["*.css"]

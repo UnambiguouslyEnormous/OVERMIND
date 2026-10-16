@@ -1,0 +1,37 @@
+Experiment: 828cbca0f90a
+Status: completed
+{
+  "promoted": true,
+  "baseline_accuracy": 0.25,
+  "candidate_accuracy": 0.925,
+  "delta": 0.675,
+  "wins": 27,
+  "losses": 0,
+  "p_one_sided": 7.450580596923828e-09,
+  "per_label": {
+    "account": {
+      "baseline": 1.0,
+      "candidate": 1.0
+    },
+    "billing": {
+      "baseline": 0.0,
+      "candidate": 0.8
+    },
+    "security": {
+      "baseline": 0.0,
+      "candidate": 0.9
+    },
+    "technical": {
+      "baseline": 0.0,
+      "candidate": 1.0
+    }
+  },
+  "policy": "Strict accuracy increase, paired one-sided p <= 0.05, no per-label regression.",
+  "scope": "Evidence applies only to this authored benchmark. Reusing its test split in later runs is exploratory, not fresh confirmation.",
+  "method": "weight_training",
+  "dataset_sha256": "f12cd7d7199688c6e359c6830029b4283769c8bd841a4fcd2eda845d75464805",
+  "candidate_sha256": "f1278fcd02217b7ee4b0a278364c0da44886ccb1ebdbeb56ba3eb9b69f45a6f9",
+  "test_count": 40,
+  "validation_accuracy": 0.9583333333333334
+}
+Artifacts: /path/to/OVERMIND/lab-data/828cbca0f90a
