@@ -193,6 +193,7 @@ class Phase2Tests(unittest.TestCase):
         root=Path(self.tmp.name)/'legacy';root.mkdir()
         with sqlite3.connect(root/'lab.sqlite3') as c:
             c.execute('CREATE TABLE runs(id TEXT PRIMARY KEY, created REAL, updated REAL, status TEXT, config TEXT, state TEXT)')
+            c.execute('CREATE TABLE events(seq INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT, time REAL, kind TEXT, message TEXT)')
             c.execute('INSERT INTO runs VALUES(?,?,?,?,?,?)',('legacy',1,1,'completed',json.dumps(DEFAULTS),json.dumps({'phase':'done'})))
         store=Store(root)
         self.assertEqual(store.get('legacy')['status'],'completed');self.assertEqual(store.billing('legacy')['calls'],[])

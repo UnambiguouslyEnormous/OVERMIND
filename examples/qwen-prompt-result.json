@@ -1,0 +1,39 @@
+{
+  "description": "Sanitized summary of a completed live experiment; not a mock result or a replayable model artifact.",
+  "mentor": "OpenAI gpt-4.1",
+  "student": "Ollama qwen2.5:1.5b",
+  "benchmark": "Project-authored CC0 support routing; 80 train / 24 validation / 40 held-out test",
+  "weight_updates": false,
+  "promoted": true,
+  "baseline_accuracy": 0.825,
+  "candidate_accuracy": 0.975,
+  "delta": 0.15000000000000002,
+  "wins": 7,
+  "losses": 1,
+  "p_one_sided": 0.03515625,
+  "per_label": {
+    "account": {
+      "baseline": 0.3,
+      "candidate": 0.9
+    },
+    "billing": {
+      "baseline": 1.0,
+      "candidate": 1.0
+    },
+    "security": {
+      "baseline": 1.0,
+      "candidate": 1.0
+    },
+    "technical": {
+      "baseline": 1.0,
+      "candidate": 1.0
+    }
+  },
+  "policy": "Strict accuracy increase, paired one-sided p <= 0.05, no per-label regression.",
+  "scope": "Evidence applies only to this authored benchmark. Reusing its test split in later runs is exploratory, not fresh confirmation.",
+  "method": "prompt_optimization",
+  "dataset_sha256": "f12cd7d7199688c6e359c6830029b4283769c8bd841a4fcd2eda845d75464805",
+  "candidate_sha256": "d43e1815b1a7ceca0bc1f43c200d4d24017de6a4f7cf2798cf7a20c21f24ad91",
+  "test_count": 40,
+  "validation_accuracy": 1.0
+}

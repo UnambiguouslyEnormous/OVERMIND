@@ -112,7 +112,7 @@ class SecurityTests(unittest.TestCase):
 
     def test_private_files_with_permissive_umask_and_existing_data(self):
         root=Path(self.tmp.name)/'custom-lab';root.mkdir(mode=0o755)
-        old=root/'legacy';old.mkdir(mode=0o755)
+        original=Store(root);old=root/original.create(DEFAULTS,benchmark());old.chmod(0o755)
         evidence=old/'baseline.json';evidence.write_text('{"evidence":true}');evidence.chmod(0o664)
         before=evidence.read_bytes();previous=os.umask(0)
         try:

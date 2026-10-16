@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import sqlite3
 import stat
@@ -10,12 +11,25 @@ from .security import redact, reject_secrets
 
 class Store:
     def __init__(self, root):
-        self.root = Path(root).resolve()
-        # A laboratory is a dedicated data directory, never the source/repository root.
-        if (self.root/'.git').exists() or self.root in (Path(__file__).resolve().parent,Path(__file__).resolve().parent.parent):
-            raise ValueError('Choose a dedicated laboratory directory outside the application source.')
+        requested = Path(root).absolute()
+        # Reject link traversal before resolving; never migrate a link target.
+        if any(path.is_symlink() for path in (requested, *requested.parents)):
+            raise ValueError('Laboratory paths must not traverse symlinks.')
+        self.root = requested.resolve()
+        if (self.root/'.git').exists() or self.root in (
+                Path('/'), Path.home().resolve(), Path(__file__).resolve().parent,
+                Path(__file__).resolve().parent.parent):
+            raise ValueError('Choose a dedicated OVERMIND laboratory directory, not a home or source directory.')
+        entries = self._migration_preflight()
+        # No filesystem mutation occurs until the entire preflight succeeds.
         self.root.mkdir(mode=0o700,parents=True,exist_ok=True)
-        self._harden_existing()
+        self.root.chmod(0o700)
+        for path, directory in entries:
+            path.chmod(0o700 if directory else 0o600)
+        marker=self.root/'.overmind-lab'
+        if not marker.exists():
+            fd=os.open(marker,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+            with os.fdopen(fd,'w') as stream:stream.write('OVERMIND laboratory v1\n')
         self._ignore_marker()
         self.db = self.root/'lab.sqlite3'
         fd=os.open(self.db,os.O_RDWR|os.O_CREAT|os.O_NOFOLLOW,0o600)
@@ -28,18 +42,59 @@ class Store:
             reserved_microusd INTEGER, charged_microusd INTEGER, input_bound INTEGER, output_cap INTEGER,
             input_tokens INTEGER, output_tokens INTEGER, status TEXT, error TEXT);''')
 
-    def _harden_existing(self):
-        # Permission-only migration: do not rewrite any experiment contents.
-        self.root.chmod(0o700)
-        for directory,dirs,files in os.walk(self.root,followlinks=False):
+    def _migration_preflight(self):
+        """Recognize ownership and validate the whole tree before changing permissions.
+
+        Empty/new directories can be initialized. Legacy installations are recognized
+        by both original SQLite schemas, never by their name or ignore file alone.
+        """
+        if not self.root.exists():return []
+        if not self.root.is_dir():raise ValueError('Laboratory path must be a directory.')
+        children=list(self.root.iterdir())
+        if not children:return []
+        def check(path):
+            info=path.lstat()
+            if stat.S_ISDIR(info.st_mode):return True
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                raise ValueError('Laboratory entries must be regular unlinked files or directories; symlinks, hardlinks and special files are unsafe.')
+            return False
+        for path in children:check(path)
+        marker=self.root/'.overmind-lab'
+        marked=marker.is_file() and marker.stat().st_size<=64 and marker.read_bytes()==b'OVERMIND laboratory v1\n'
+        if marker.exists() and not marked:
+            raise ValueError('Invalid OVERMIND ownership marker; no permissions were changed.')
+        db=self.root/'lab.sqlite3'
+        run_ids=set()
+        legacy=False
+        if db.is_file():
+            try:
+                # Immutable read-only inspection cannot create journals or change the DB.
+                with sqlite3.connect(db.as_uri()+'?mode=ro&immutable=1',uri=True) as c:
+                    expected={'runs':['id','created','updated','status','config','state'],
+                              'events':['seq','run_id','time','kind','message']}
+                    legacy=all([r[1] for r in c.execute('PRAGMA table_info('+table+')')]==columns
+                               for table,columns in expected.items())
+                    if legacy:run_ids={r[0] for r in c.execute('SELECT id FROM runs')}
+            except sqlite3.Error:
+                raise ValueError('Unrecognized laboratory database; no permissions were changed.') from None
+            if not legacy:raise ValueError('Unrecognized laboratory database schema; no permissions were changed.')
+        if not (marked or legacy):
+            raise ValueError('Directory is not recognized as OVERMIND-owned. Choose a new or empty dedicated directory; no permissions were changed.')
+        files={'.overmind-lab','.gitignore','lab.sqlite3','lab.sqlite3-journal',
+               'lab.sqlite3-wal','lab.sqlite3-shm','worker.lock'}
+        for path in children:
+            if path.is_dir():
+                if path.name not in run_ids and not re.fullmatch(r'[0-9a-f]{12}',path.name):
+                    raise ValueError('Unrecognized directory in laboratory; no permissions were changed.')
+            elif path.name not in files:
+                raise ValueError('Unrecognized file in laboratory; no permissions were changed.')
+        entries=[]
+        def failed(error):raise error
+        for directory,dirs,files in os.walk(self.root,followlinks=False,onerror=failed):
             for name in dirs+files:
                 path=Path(directory)/name
-                mode=path.lstat().st_mode
-                if stat.S_ISLNK(mode):
-                    raise ValueError('Laboratory entries must not be symlinks; review the data directory.')
-                if stat.S_ISDIR(mode):path.chmod(0o700)
-                elif stat.S_ISREG(mode):path.chmod(0o600)
-                else:raise ValueError('Laboratory entries must be regular files or directories.')
+                entries.append((path,check(path)))
+        return entries
 
     def _ignore_marker(self):
         path=self.root/'.gitignore'

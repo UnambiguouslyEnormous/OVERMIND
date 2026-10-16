@@ -2,7 +2,9 @@
 
 A native Linux AI apprenticeship laboratory with real, bounded experiments and evidence before promotion.
 
-**Phase 2 extends the working first vertical slice; this is not the completed long-term vision.** It trains a small CPU text classifier from real examples, saves its weights, compares a frozen candidate against its original student on held-out examples, and records why promotion passed or failed. Local LLMs or OpenAI/Anthropic cloud mentors can direct bounded experiments through actual inference APIs. Cloud mentors require explicit authorization and a configured budget. See the [Phase 2 configuration guide](docs/phase2.md).
+**Linux source-checkout beta.** It trains a small CPU text classifier from real examples, saves its weights, compares a frozen candidate against its original student on held-out examples, and records why promotion passed or failed. Local LLMs or OpenAI/Anthropic cloud mentors can direct bounded experiments through actual inference APIs. Cloud mentors require explicit authorization and a configured budget. See the [Phase 2 configuration guide](docs/phase2.md).
+
+A completed live OpenAI GPT-4.1 → Ollama Qwen2.5 1.5B **prompt-optimization** experiment improved held-out support-routing accuracy from **33/40 (82.5%) to 39/40 (97.5%)**. This changed the system prompt, not Qwen's weights. The small benchmark does not establish general intelligence or broad model improvement. See the [sanitized result](examples/qwen-prompt-result.json) and [verification record](docs/phase2-verification.md).
 
 The targeted [mentor response validation fix](docs/mentor-response-fix.md) documents structured proposals, bounded corrections, diagnostics, and safely rerunning a failed experiment.
 
@@ -10,19 +12,18 @@ Credential protections, private data permissions, and local/CI secret-check setu
 
 ## Run
 
-From this directory:
+Use a Linux desktop with **system Python 3.12+**, Bash, and GTK 3/PyGObject. Ubuntu 24.04 or a compatible Pop!_OS installation is a suitable starting point; older system Pythons are unsupported. Install the small system dependencies with your distribution's package manager:
 
 ```bash
+sudo apt install git python3 python3-gi gir1.2-gtk-3.0
+python3 --version
+# Replace REPOSITORY_URL with this repository's URL.
+git clone REPOSITORY_URL OVERMIND
+cd OVERMIND
 ./run.sh
 ```
 
-The native desktop uses Python 3.12+ and GTK 3/PyGObject. On Pop!_OS/Ubuntu, if missing:
-
-```bash
-sudo apt install python3-gi gir1.2-gtk-3.0
-```
-
-Run with the system Python, which can see distro GTK bindings. No pip packages, model download, GPU, credentials, or network connection are required for the built-in weight-training experiment.
+For an already downloaded checkout, start at `cd OVERMIND`. `run.sh` locates its own checkout and also works from another working directory or a path containing spaces. It is the supported portable launcher; no machine-specific desktop shortcut is shipped. Run with system Python, which can see distro GTK bindings. No pip installation, model download, GPU, credentials, or network connection is required for the built-in classifier experiment. CLI-only use needs no GTK bindings. Binary packages and a first-run installer are not provided.
 
 1. Keep **Curriculum controller** and **CPU text classifier** selected for the first run.
 2. Use the included CC0 support-routing dataset, or choose a licensed dataset with explicit train/validation/test splits.
@@ -32,7 +33,7 @@ Run with the system Python, which can see distro GTK bindings. No pip packages, 
 
 The built-in controller is a **deterministic curriculum algorithm, not an LLM**. The built-in student is a **trainable linear neural text classifier, not a generative language model**. A free-text objective alone cannot turn it into a different model architecture or create an arbitrary benchmark. Supply a suitable dataset and labels for a different classification task.
 
-A desktop launcher is included as `OVERMIND.desktop` for this checkout. Persistent experiments live in `lab-data/`; use `./run.sh --data /your/path` to select another laboratory. Closing the application stops its active worker and preserves completed checkpoints; pause/resume works while the application is open. Recover applies to unexpected worker exits.
+Persistent experiments live in `lab-data/`; use `./run.sh --data /your/path` to select a new/empty dedicated directory or an existing recognized OVERMIND laboratory. Unrelated nonempty directories, home/source roots, symlinks and hardlinks are rejected before permission migration. Back up existing data before upgrading. Closing the application stops its active worker and preserves completed checkpoints; pause/resume works while the application is open. Recover applies to unexpected worker exits.
 
 ## Headless use
 
@@ -83,7 +84,7 @@ Save it as `config.json`, then run `./run.sh run --config config.json`. An LLM s
 
 ## What the measurements mean
 
-The included project-authored synthetic CC0 benchmark has 80 training, 24 validation, and 40 held-out examples across account, billing, security, and technical support. Its baseline is an untrained classifier, so it is deliberately weak. This demonstrates real learning and artifact verification, not state-of-the-art performance or general language-model improvement.
+The included project-authored synthetic CC0 benchmark has 80 training, 24 validation, and 40 held-out examples across account, billing, security, and technical support. For the built-in SGD experiment, the baseline is an untrained classifier, so it is deliberately weak. The Qwen experiment instead compares a generic classification prompt with the selected prompt on the same fixed served model. This demonstrates real learning and artifact verification, not state-of-the-art performance or general language-model improvement.
 
 The model uses deterministic hashed word, bigram, and character features with a softmax output. SGD minimizes cross-entropy. Extra practice is selected from training errors only. Each epoch's validation score controls checkpoint selection; the mentor can inspect validation outcomes. **Only after selection finishes** does the evaluator compare the original and frozen candidate on the final test split.
 
@@ -112,10 +113,15 @@ The test set is held out from optimization within each experiment. It is **not c
 | Status | Capability |
 | --- | --- |
 | Implemented and exercised | CPU SGD weight training, baseline and independent final evaluation, artifact hashes, promotion gating, saved student reuse, SQLite history, hard worker limits, pause/resume/stop, checkpoint recovery, CLI |
-| Implemented; live integrations still require external setup | OpenAI/Anthropic cloud mentor APIs, spending ledger, local model discovery/inspection/inference, LLM-directed SGD, prompt/retrieval optimization, saved-artifact inference; protocol/pipeline tests use clearly marked fixtures |
+| Implemented and exercised live on one setup | OpenAI GPT-4.1 mentor → Ollama Qwen2.5 1.5B prompt optimization, baseline/candidate evaluation and promotion; see the sanitized result above |
+| Implemented; automated fixture coverage, additional live verification pending | Anthropic mentor, local/compatible mentors, LLM-directed SGD, lexical retrieval augmentation, saved prompt/retrieval inference; external engines/credentials required |
 | Implemented; graphical verification pending in restricted build environment | Native GTK desktop, configuration, local-sharing permission, live journal, resource summary, artifact viewer, classifier trial |
 | Future | LoRA/QLoRA/SFT for generative models, semantic/vector RAG, dataset discovery, permitted synthetic data/distillation, custom evaluators, stronger external inference resource isolation, automatic model-server checkpoint export, source-change proposals with approval |
 
-No LoRA job has been run or claimed. The NVIDIA driver was unavailable during development, so the application selected CPU training. Ollama GGUF inference artifacts are not assumed to be trainable Transformer checkpoints. Future LoRA support must use compatible original model weights, verified licenses, and hardware preflight, and preserve the original weights.
+No generative-model LoRA, QLoRA, SFT, multi-task learning, automatic continual learning, or general intelligence training is implemented. Saved classifier weights can be reused manually; stored experiment history is not continual weight learning. Retrieval is lexical selection of labeled training examples, not vector search. No LoRA job has been run or claimed. The NVIDIA driver was unavailable during development, so the application selected CPU training. Ollama GGUF inference artifacts are not assumed to be trainable Transformer checkpoints. Future LoRA support must use compatible original model weights, verified licenses, and hardware preflight, and preserve the original weights.
 
 See the [Phase 2 guide](docs/phase2.md), [Phase 2 verification](docs/phase2-verification.md), [architecture](docs/architecture.md), [verification evidence](docs/verification.md), and [data license](DATA_LICENSE.md).
+
+## License and contributions
+
+Application code is licensed under [MIT](LICENSE), copyright Jim Wilks, 2026. The included benchmark has its separate [CC0 notice](DATA_LICENSE.md); external models, datasets, engines and libraries retain their own licenses. See [CONTRIBUTING.md](CONTRIBUTING.md) for issues, pull requests and secret checks, and the [beta release checks](docs/beta-release.md) for verification limits.
