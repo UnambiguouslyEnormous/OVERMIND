@@ -2,3 +2,54 @@ __pycache__/
 *.pyc
 lab-data/
 .venv/
+
+# Local credentials and private configuration (safe templates stay visible).
+.env
+.env.*
+!.env.example
+!.env.sample
+/config.json
+*.local.json
+*.local.yaml
+*.local.yml
+credentials
+credentials.json
+credentials.yaml
+credentials.yml
+credentials.toml
+credentials.ini
+credentials.env
+secrets
+secrets.json
+secrets.yaml
+secrets.yml
+secrets.toml
+secrets.ini
+secrets.env
+!credentials.example.json
+!secrets.example.json
+*.key
+*.pem
+*.p12
+*.pfx
+.aws/credentials
+.aws/config
+.codex/auth.json
+
+# Local logs and editor/runtime temporary files.
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+/logs/
+/tmp/
+
+# Known database/lock names at any custom laboratory path.
+**/lab.sqlite3*
+**/worker.lock
+/local-data/
+/lab-data-*/
+# Store also writes a private ignore marker inside every laboratory directory.
+/docs/evidence/

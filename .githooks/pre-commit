@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+exec python3 -B -m overmind.secret_scan --staged

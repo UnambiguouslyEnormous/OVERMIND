@@ -7,9 +7,22 @@ from .data import load
 from .hardware import inspect
 from .lab import DEFAULTS, config_checked, worker
 from .store import Store
+from .security import harden_process, redacted_output, redact
 
 
 def main():
+    with redacted_output():
+        try:
+            harden_process()
+            return _main()
+        except KeyboardInterrupt:
+            return 130
+        except Exception as error:
+            print('OVERMIND:',redact(str(error)),file=sys.stderr)
+            return 1
+
+
+def _main():
     parser=argparse.ArgumentParser(description='OVERMIND — bounded, verifiable local AI experiments')
     parser.add_argument('--data',default=str(Path(__file__).resolve().parent.parent/'lab-data'),help='Persistent laboratory directory')
     commands=parser.add_subparsers(dest='command')
@@ -37,11 +50,11 @@ def main():
             launch(args.data);return 0
         if args.command=='ollama':
             from .ollama import discover
-            print(json.dumps(discover(),indent=2));return 0
+            print(json.dumps(redact(discover()),indent=2));return 0
         if args.command=='models':
             from .providers import provider
-            print(json.dumps(provider({'kind':args.provider,'model':'discovery','url':args.url}).models(),indent=2));return 0
-        if args.command=='hardware':print(json.dumps(inspect(),indent=2));return 0
+            print(json.dumps(redact(provider({'kind':args.provider,'model':'discovery','url':args.url}).models()),indent=2));return 0
+        if args.command=='hardware':print(json.dumps(redact(inspect()),indent=2));return 0
         if args.command=='example-dataset':Path(args.path).write_text(json.dumps(load(),indent=2));return 0
         if args.command=='predict':
             from .inference import predict_artifact
@@ -54,7 +67,7 @@ def main():
             for r in store.list():print(r['id'],r['status'])
             return 0
         if args.command=='show':
-            print(json.dumps(store.get(args.id),indent=2));return 0
+            print(json.dumps(redact(store.get(args.id)),indent=2));return 0
         if args.command=='recover':
             if store.get(args.id)['status'] not in ('interrupted','ready'):raise ValueError('Recovery requires a ready or interrupted experiment.')
             return worker(args.data,args.id)
@@ -64,7 +77,7 @@ def main():
             rid=store.create(config_checked(c),load(args.dataset));print('Experiment:',rid,flush=True)
             result=worker(args.data,rid)
             run=store.get(rid);print('Status:',run['status'])
-            if 'report' in run['state']:print(json.dumps(run['state']['report'],indent=2))
+            if 'report' in run['state']:print(json.dumps(redact(run['state']['report']),indent=2))
             else:
                 for e in store.events(rid):print(e['kind']+':',e['message'])
             print('Artifacts:',store.root/rid)

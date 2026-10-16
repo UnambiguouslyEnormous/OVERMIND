@@ -77,3 +77,19 @@ def json_reply(text):
     result = json.loads(text)
     if not isinstance(result,dict): raise ValueError('Mentor must return a JSON object.')
     return result
+
+
+def inspection_summary(config,metadata):
+    """Allowlisted, bounded UI text. Never include license text or arbitrary metadata."""
+    def short(value):
+        return str(value).replace('\n',' ')[:100] if isinstance(value,(str,int,float)) else 'not exposed'
+    if config['kind']=='linear':return 'CPU text classifier · connected · '+short(metadata.get('parameters'))+' parameters'
+    details=metadata.get('details') or {}
+    info=metadata.get('model_info') or {}
+    context=next((value for key,value in info.items() if key.endswith('.context_length')),None)
+    identity=metadata.get('identity') or {}
+    size=identity.get('size')
+    size_text=f'{size/(1024**3):.2f} GiB' if isinstance(size,(int,float)) and size>=0 else 'disk size not exposed'
+    return ('Model '+short(config.get('model'))+' · connected · '+short(details.get('parameter_size'))+
+        ' parameters · '+size_text+' · quantization '+short(details.get('quantization_level'))+
+        ' · context '+short(context))

@@ -1,6 +1,7 @@
 import os
 import platform
 import subprocess
+from .security import subprocess_environment
 
 def inspect():
     mem = {}
@@ -12,7 +13,7 @@ def inspect():
     except OSError: pass
     gpu = None
     try:
-        r = subprocess.run(['nvidia-smi','--query-gpu=name,memory.total,memory.used,utilization.gpu','--format=csv,noheader,nounits'],capture_output=True,text=True,timeout=3)
+        r = subprocess.run(['nvidia-smi','--query-gpu=name,memory.total,memory.used,utilization.gpu','--format=csv,noheader,nounits'],capture_output=True,text=True,timeout=3,env=subprocess_environment())
         if r.returncode == 0: gpu = r.stdout.strip()
     except (OSError,subprocess.TimeoutExpired): pass
     return {'platform':platform.system(),'cpu_count':os.cpu_count(),'ram_mb':mem.get('MemTotal'), 'available_mb':mem.get('MemAvailable'),

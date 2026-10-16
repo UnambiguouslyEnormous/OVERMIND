@@ -4,6 +4,10 @@ A native Linux AI apprenticeship laboratory with real, bounded experiments and e
 
 **Phase 2 extends the working first vertical slice; this is not the completed long-term vision.** It trains a small CPU text classifier from real examples, saves its weights, compares a frozen candidate against its original student on held-out examples, and records why promotion passed or failed. Local LLMs or OpenAI/Anthropic cloud mentors can direct bounded experiments through actual inference APIs. Cloud mentors require explicit authorization and a configured budget. See the [Phase 2 configuration guide](docs/phase2.md).
 
+The targeted [mentor response validation fix](docs/mentor-response-fix.md) documents structured proposals, bounded corrections, diagnostics, and safely rerunning a failed experiment.
+
+Credential protections, private data permissions, and local/CI secret-check setup are documented in [security hardening](docs/security-hardening.md).
+
 ## Run
 
 From this directory:

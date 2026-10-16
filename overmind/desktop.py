@@ -11,8 +11,8 @@ from .data import load
 from .hardware import inspect
 from .lab import Manager, DEFAULTS, config_checked
 from .model import TextStudent
-from .providers import provider
-from .security import register, redact
+from .providers import provider, inspection_summary
+from .security import register, redact, clear_credentials, harden_process
 from .ollama import discover
 
 CSS = b'''
@@ -127,6 +127,7 @@ class Desktop(Gtk.Window):
                 self.api_key=entry();self.api_key.set_visibility(False);self.api_key.set_placeholder_text('Session API key; blank uses provider environment variable')
                 self.api_key.set_input_purpose(Gtk.InputPurpose.PASSWORD)
                 self.api_key.set_no_show_all(True);card.pack_start(self.api_key,False,False,0)
+                card.pack_start(button('Clear session keys',self.clear_session_keys),False,False,0)
             card.pack_start(button('Discover models',lambda r=role:self.discover_models(r)),False,False,0)
             if role=='student':card.pack_start(button('Test local inference',self.test_student),False,False,0)
             check=button('Inspect connection',lambda r=role:self.check_connection(r));card.pack_start(check,False,False,0)
@@ -216,6 +217,13 @@ class Desktop(Gtk.Window):
         trial.pack_start(button('Classify with candidate',self.try_candidate),False,False,0)
         self.try_result=label('—','subtitle',True);trial.pack_start(self.try_result,False,False,0);c.pack_start(trial,False,False,0)
 
+    def clear_session_keys(self):
+        self.manager.stop()
+        clear_credentials()
+        self.api_key.set_text('')
+        self.invalidate_cloud_authorization()
+        self.role_widgets['mentor'][3].set_text('Session keys cleared and the active worker stopped. Enter a key again or restart to use environment credentials. An already accepted provider request may finish.')
+
     def invalidate_cloud_authorization(self):
         if hasattr(self,'cloud_authorized'):
             self.cloud_authorized.set_active(False);self.cloud_sharing.set_active(False)
@@ -235,16 +243,17 @@ class Desktop(Gtk.Window):
     def background(self,work,done):
         def task():
             try: result=work();error=None
-            except Exception as e:result=None;error=redact(str(e))
-            GLib.idle_add(done,result,error)
+            except Exception as e:result=None;error=redact(redact(str(e)))
+            GLib.idle_add(done,redact(result),error)
         threading.Thread(target=task,daemon=True).start()
 
     def check_connection(self,role):
-        try: p=provider(self.role_config(role))
-        except Exception as e:self.role_widgets[role][3].set_text(str(e));return
+        try:
+            config=self.role_config(role);p=provider(config)
+        except Exception as e:self.role_widgets[role][3].set_text(redact(str(e)));return
         self.role_widgets[role][3].set_text('Inspecting real server metadata…')
         def done(result,error):
-            self.role_widgets[role][3].set_text(error or json.dumps(result,ensure_ascii=False)[:850])
+            self.role_widgets[role][3].set_text(error or (inspection_summary(config,result) if config['kind'] in ('ollama','compatible') else f"{config['kind']} · {config['model']} · connected (metadata only; inference not tested)"))
         self.background(p.inspect,done)
 
     def discover_models(self,role):
@@ -257,7 +266,7 @@ class Desktop(Gtk.Window):
         elif kind=='ollama':work=lambda:discover(url.get_text().strip())
         else:
             try:work=provider({'kind':kind,'url':url.get_text().strip(),'model':'discovery'}).models
-            except Exception as e:info.set_text(str(e));return
+            except Exception as e:info.set_text(redact(str(e)));return
         info.set_text('Discovering models…')
         def done(result,error):
             if error:info.set_text(error);return
@@ -275,7 +284,7 @@ class Desktop(Gtk.Window):
             cfg=self.role_config('student')
             if cfg['kind'] not in ('ollama','compatible'):raise ValueError('Select a local LLM first.')
             p=provider(cfg)
-        except Exception as e:self.role_widgets['student'][3].set_text(str(e));return
+        except Exception as e:self.role_widgets['student'][3].set_text(redact(str(e)));return
         self.role_widgets['student'][3].set_text('Testing local generation…')
         self.background(lambda:p.generate('Reply briefly.','Say ready.',16),lambda r,e:self.role_widgets['student'][3].set_text(e or 'Local inference succeeded: '+r[:160]))
 
@@ -287,7 +296,7 @@ class Desktop(Gtk.Window):
             try:
                 data=load(path);self.dataset_path=path
                 self.dataset_label.set_text(f'{Path(path).name} · {data["license"]} · '+ ' / '.join(f'{len(data[k])} {k}' for k in ('train','validation','test')))
-            except Exception as e:self.message(str(e))
+            except Exception as e:self.message(redact(str(e)))
         dialog.destroy()
 
     def choose_checkpoint(self):
@@ -299,7 +308,7 @@ class Desktop(Gtk.Window):
                 if Path(path).stat().st_size>4_000_000:raise ValueError('Checkpoint exceeds 4 MB.')
                 TextStudent.restore(json.loads(Path(path).read_text()))
                 self.checkpoint_path=path;self.checkpoint_label.set_text('Base checkpoint: '+Path(path).name)
-            except Exception as e:self.message(str(e))
+            except Exception as e:self.message(redact(str(e)))
         dialog.destroy()
 
     def reset_checkpoint(self):
@@ -323,7 +332,7 @@ class Desktop(Gtk.Window):
             c=config_checked(c);dataset=load(self.dataset_path)
             rid=self.store.create(c,dataset);self.selected=rid;self.manager.start(rid)
             self.tabs.set_current_page(1);self.message('Experiment started.');self.tick()
-        except Exception as e:self.message(str(e))
+        except Exception as e:self.message(redact(str(e)))
 
     def new(self):self.tabs.set_current_page(0)
     def history_selected(self,_,row):
@@ -335,7 +344,7 @@ class Desktop(Gtk.Window):
                 if self.manager.rid==self.selected and self.manager.process and self.manager.process.poll() is None:self.manager.resume()
                 else:self.manager.start(self.selected)
             self.tick()
-        except Exception as e:self.run_detail.set_text(str(e))
+        except Exception as e:self.run_detail.set_text(redact(str(e)))
     def stop(self):self.manager.stop();self.tick()
 
     def tick(self):
@@ -373,7 +382,7 @@ class Desktop(Gtk.Window):
         events=self.store.events(self.selected);sig=(self.selected,events[-1]['seq'] if events else 0)
         if sig!=self.last_events:
             self.last_events=sig
-            self.journal.get_buffer().set_text('\n\n'.join(f'{time.strftime("%H:%M:%S",time.localtime(e["time"]))}  {e["kind"].upper()}\n{e["message"]}' for e in events))
+            self.journal.get_buffer().set_text('\n\n'.join(f'{time.strftime("%H:%M:%S",time.localtime(e["time"]))}  {e["kind"].upper()}\n{inspection_summary(cfg['student'],s.get('student_info',{})) if e['kind']=='inspection' else e['message']}' for e in events))
             self.show_artifact()
         if report:
             self.verification.set_text(('PROMOTED' if report['promoted'] else 'NOT PROMOTED')+f' · {report["baseline_accuracy"]:.1%} → {report["candidate_accuracy"]:.1%} · paired p = {report["p_one_sided"]:.5f}\n'+report['policy']+'\n'+report['scope'])
@@ -400,10 +409,11 @@ class Desktop(Gtk.Window):
                 from .inference import predict_artifact
                 self.try_result.set_text('Running one local inference; this manual trial does not affect evaluation scores…')
                 self.background(lambda:predict_artifact(artifact,text,allow_local=True),lambda result,error:self.try_result.set_text(error or result))
-        except Exception as e:self.try_result.set_text(str(e))
+        except Exception as e:self.try_result.set_text(redact(str(e)))
 
     def close(self,*_):
         self.manager.stop();Gtk.main_quit();return False
 
 def launch(root):
+    harden_process()
     app=Desktop(root);app.show_all();Gtk.main()

@@ -5,9 +5,12 @@ import urllib.request
 from decimal import Decimal, InvalidOperation
 
 from .security import credential
+from .mentor import ProposalError
 
 class ProviderError(ValueError): pass
 class BudgetExceeded(ValueError): pass
+class TruncatedResponse(ProviderError):
+    category = 'truncated_response'
 
 
 def cloud_limits(value):
@@ -35,6 +38,7 @@ class CloudProvider:
         self.last_usage=None
         self.reservation=None
         self._dispatch_active=False
+        self.proposal_schema=None
 
     def request(self,route,body=None):
         if body is not None and not self._dispatch_active:raise ProviderError('Cloud generation requires an authorized experiment reservation.')
@@ -84,8 +88,13 @@ class CloudProvider:
         if not isinstance(system,str) or not isinstance(prompt,str) or len(system)+len(prompt)>24000:raise ValueError('Cloud context exceeds the laboratory input cap.')
         if type(max_tokens) is not int or not 1<=max_tokens<=8192:raise ValueError('Invalid output token cap.')
         if self.kind=='openai':
-            return '/v1/responses',{'model':self.model,'instructions':system,'input':prompt,'max_output_tokens':max_tokens,'store':False}
-        return '/v1/messages',{'model':self.model,'system':system,'messages':[{'role':'user','content':prompt}],'max_tokens':max_tokens}
+            body={'model':self.model,'instructions':system,'input':prompt,'max_output_tokens':max_tokens,'store':False}
+            if self.proposal_schema:
+                body['text']={'format':{'type':'json_schema','name':'overmind_proposal','strict':True,'schema':self.proposal_schema}}
+            return '/v1/responses',body
+        body={'model':self.model,'system':system,'messages':[{'role':'user','content':prompt}],'max_tokens':max_tokens}
+        if self.proposal_schema:body['output_config']={'format':{'type':'json_schema','schema':self.proposal_schema}}
+        return '/v1/messages',body
 
     def generate(self,system,prompt,max_tokens=512):
         route,body=self.payload(system,prompt,max_tokens)
@@ -105,11 +114,19 @@ class CloudProvider:
                 i+=n
         self.last_usage={'input_tokens':i,'output_tokens':o}
         if self.kind=='openai':
+            if reply.get('status')=='incomplete' and (reply.get('incomplete_details') or {}).get('reason')=='max_output_tokens':
+                raise TruncatedResponse('Mentor response reached the output token cap; return a shorter complete proposal. The configured cap is unchanged.')
             if reply.get('status')!='completed':raise ProviderError('Cloud generation incomplete or refused; increase output cap within budget or select another model.')
             answer=''.join(part.get('text','') for item in reply.get('output',[]) if item.get('type')=='message'
                 for part in item.get('content',[]) if part.get('type')=='output_text')
         else:
+            if reply.get('stop_reason')=='max_tokens':
+                raise TruncatedResponse('Mentor response reached the output token cap; return a shorter complete proposal. The configured cap is unchanged.')
             if reply.get('stop_reason')!='end_turn':raise ProviderError('Claude generation did not complete; increase output cap within budget or select another model.')
             answer=''.join(item.get('text','') for item in reply.get('content',[]) if item.get('type')=='text')
-        if not answer.strip() or len(answer)>16000:raise ProviderError('Cloud mentor returned no usable text or exceeded the response cap.')
+        if not answer.strip():
+            refused=self.kind=='openai' and any(part.get('type')=='refusal' for item in reply.get('output',[]) if item.get('type')=='message' for part in item.get('content',[]))
+            if refused:raise ProviderError('Mentor refused the proposal request; no corrective retry. Review the objective and provider policy.')
+            raise ProposalError('empty_response','Mentor returned no proposal text; return the complete JSON proposal.')
+        if len(answer)>16000:raise ProposalError('oversized_response','Mentor response exceeds 16000 characters; return a concise complete proposal.')
         return answer

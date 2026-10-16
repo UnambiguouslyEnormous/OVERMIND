@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import stat
 import time
 import uuid
 from .security import redact, reject_secrets
@@ -10,14 +11,59 @@ from .security import redact, reject_secrets
 class Store:
     def __init__(self, root):
         self.root = Path(root).resolve()
-        self.root.mkdir(parents=True,exist_ok=True)
+        # A laboratory is a dedicated data directory, never the source/repository root.
+        if (self.root/'.git').exists() or self.root in (Path(__file__).resolve().parent,Path(__file__).resolve().parent.parent):
+            raise ValueError('Choose a dedicated laboratory directory outside the application source.')
+        self.root.mkdir(mode=0o700,parents=True,exist_ok=True)
+        self._harden_existing()
+        self._ignore_marker()
         self.db = self.root/'lab.sqlite3'
+        fd=os.open(self.db,os.O_RDWR|os.O_CREAT|os.O_NOFOLLOW,0o600)
+        try:os.fchmod(fd,0o600)
+        finally:os.close(fd)
         with self.connect() as c:
             c.executescript('''CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, created REAL, updated REAL, status TEXT, config TEXT, state TEXT);
             CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT, time REAL, kind TEXT, message TEXT);
             CREATE TABLE IF NOT EXISTS cloud_calls(id TEXT PRIMARY KEY, run_id TEXT, created REAL, provider TEXT, model TEXT,
             reserved_microusd INTEGER, charged_microusd INTEGER, input_bound INTEGER, output_cap INTEGER,
             input_tokens INTEGER, output_tokens INTEGER, status TEXT, error TEXT);''')
+
+    def _harden_existing(self):
+        # Permission-only migration: do not rewrite any experiment contents.
+        self.root.chmod(0o700)
+        for directory,dirs,files in os.walk(self.root,followlinks=False):
+            for name in dirs+files:
+                path=Path(directory)/name
+                mode=path.lstat().st_mode
+                if stat.S_ISLNK(mode):
+                    raise ValueError('Laboratory entries must not be symlinks; review the data directory.')
+                if stat.S_ISDIR(mode):path.chmod(0o700)
+                elif stat.S_ISREG(mode):path.chmod(0o600)
+                else:raise ValueError('Laboratory entries must be regular files or directories.')
+
+    def _ignore_marker(self):
+        path=self.root/'.gitignore'
+        existing=path.read_bytes() if path.exists() else b''
+        marker=b'# OVERMIND private laboratory data\n*\n'
+        if not existing.endswith(marker):
+            fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_APPEND|os.O_NOFOLLOW,0o600)
+            with os.fdopen(fd,'ab') as stream:
+                os.fchmod(stream.fileno(),0o600)
+                if existing and not existing.endswith(b'\n'):stream.write(b'\n')
+                stream.write(marker)
+
+    def _path(self,rid,name):
+        if any(not isinstance(part,str) or part in ('','.','..') or Path(part).name!=part for part in (rid,name)):
+            raise ValueError('Invalid artifact name.')
+        directory=self.root/rid
+        if directory.is_symlink() or (directory/name).is_symlink():
+            raise ValueError('Laboratory entries must not be symlinks.')
+        return directory/name
+
+    def lock(self):
+        fd=os.open(self.root/'worker.lock',os.O_WRONLY|os.O_CREAT|os.O_NOFOLLOW,0o600)
+        os.fchmod(fd,0o600)
+        return os.fdopen(fd,'a')
 
     def connect(self):
         c = sqlite3.connect(self.db,timeout=10)
@@ -26,6 +72,7 @@ class Store:
 
     def create(self, config, dataset):
         reject_secrets(config)
+        reject_secrets(dataset)
         config=redact(config)
         original=None
         checkpoint=config.get('student',{}).get('checkpoint')
@@ -38,7 +85,7 @@ class Store:
             if model.labels!=dataset['labels']:
                 raise ValueError('Checkpoint labels must match dataset labels in the same order.')
         rid = uuid.uuid4().hex[:12]
-        (self.root/rid).mkdir()
+        (self.root/rid).mkdir(mode=0o700)
         self.artifact(rid,'dataset.json',dataset)
         if original is not None: self.artifact(rid,'original-student.json',original)
         with self.connect() as c:
@@ -58,27 +105,30 @@ class Store:
 
     def update(self,rid,*,status=None,state=None):
         with self.connect() as c:
-            if status is not None: c.execute('UPDATE runs SET status=?,updated=? WHERE id=?',(status,time.time(),rid))
+            if status is not None: c.execute('UPDATE runs SET status=?,updated=? WHERE id=?',(redact(status),time.time(),rid))
+            if state is not None: reject_secrets(state)
             if state is not None: c.execute('UPDATE runs SET state=?,updated=? WHERE id=?',(json.dumps(redact(state)),time.time(),rid))
 
     def event(self,rid,kind,message):
-        with self.connect() as c: c.execute('INSERT INTO events(run_id,time,kind,message) VALUES(?,?,?,?)',(rid,time.time(),kind,redact(str(message))[:20000]))
+        with self.connect() as c: c.execute('INSERT INTO events(run_id,time,kind,message) VALUES(?,?,?,?)',(rid,time.time(),redact(kind),redact(str(message))[:20000]))
 
     def events(self,rid):
         with self.connect() as c: return [dict(x) for x in c.execute('SELECT * FROM events WHERE run_id=? ORDER BY seq',(rid,))]
 
     def artifact(self,rid,name,data):
-        if Path(name).name != name or Path(rid).name != rid: raise ValueError('Invalid artifact name.')
-        path = self.root/rid/name
+        reject_secrets(data)
+        path = self._path(rid,name)
         raw = json.dumps(redact(data),indent=2,allow_nan=False).encode()
         tmp = path.with_suffix('.tmp')
-        with open(tmp,'wb') as f:
+        fd=os.open(tmp,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|os.O_NOFOLLOW,0o600)
+        with os.fdopen(fd,'wb') as f:
+            os.fchmod(f.fileno(),0o600)
             f.write(raw); f.flush(); os.fsync(f.fileno())
         os.replace(tmp,path)
         return hashlib.sha256(raw).hexdigest()
 
     def read(self,rid,name):
-        return json.loads((self.root/rid/name).read_text())
+        return json.loads(self._path(rid,name).read_text())
 
     def reserve_cloud(self,rid,kind,model,limits,input_bound,output_cap):
         from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
@@ -94,7 +144,7 @@ class Store:
             used=c.execute('SELECT COALESCE(SUM(charged_microusd),0) FROM cloud_calls WHERE run_id=?',(rid,)).fetchone()[0]
             if used+reserved>budget:raise BudgetExceeded('Cloud budget cannot cover the next conservative reservation. No request was sent.')
             c.execute('INSERT INTO cloud_calls VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                (call_id,rid,time.time(),kind,model,reserved,reserved,input_bound,output_cap,None,None,'reserved',None))
+                (call_id,rid,time.time(),redact(kind),redact(model),reserved,reserved,input_bound,output_cap,None,None,'reserved',None))
         return call_id
 
     def settle_cloud(self,call_id,limits,usage,error=False):
