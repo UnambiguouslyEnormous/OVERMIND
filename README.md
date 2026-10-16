@@ -10,6 +10,8 @@ OVERMIND brings training, evaluation, and experiment evidence into one GTK deskt
 
 Start with the built-in classifier: **no model download, GPU, API key, or paid service required**. Optional local and cloud mentors can guide bounded experiments when you choose to connect them.
 
+Optional GPU acceleration: When using locally hosted LLMs through Ollama or another compatible inference engine, OVERMIND can benefit from GPU acceleration provided by that engine. The built-in classifier currently trains on the CPU.
+
 **v0.2.0-beta.1 · Linux source-checkout beta.** Ubuntu 24.04 and compatible Pop!_OS installations are the primary targets. Other distributions have not been tested. Interactive desktop acceptance remains pending; see the [beta verification notes](docs/beta-release.md).
 
 [Get started](#run) · [First experiment](#your-first-experiment) · [Measured result](#a-measured-prompt-improvement) · [Documentation](docs/README.md) · [Contribute](CONTRIBUTING.md)
