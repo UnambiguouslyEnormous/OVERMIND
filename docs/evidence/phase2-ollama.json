@@ -1,6 +1,0 @@
-{
-  "installed": true,
-  "running": false,
-  "models": [],
-  "guidance": "Ollama endpoint is unreachable. Install Ollama using the instructions at https://docs.ollama.com/linux . Start its service (or ollama serve), then provision a suitably licensed small model yourself. OVERMIND never downloads a model automatically."
-}
