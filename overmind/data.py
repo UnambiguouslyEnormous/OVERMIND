@@ -80,6 +80,9 @@ def benchmark():
     return validate({'name':'Support routing v1', 'license':'CC0-1.0', 'labels':LABELS, **parts})
 
 def validate(data):
+    if isinstance(data,dict) and data.get('format')=='gafaw.sft.v1':
+        from .sft_data import validate as validate_sft
+        return validate_sft(data)
     if not isinstance(data, dict) or not data.get('license') or len(str(data['license'])) > 500:
         raise ValueError('Dataset requires an explicit license identifier or permission statement.')
     labels = data.get('labels', [])

@@ -46,7 +46,7 @@ class Desktop(Gtk.Window):
         super().__init__(title='GAFAW — The Free, Open-Source AI Laboratory')
         self.set_default_size(1280,900);self.set_size_request(980,700)
         self.manager=Manager(root);self.store=self.manager.store
-        self.selected=None;self.prepared_dataset=None;self.dataset_path=None;self.checkpoint_path=None;self.history_signature=None;self.last_events=None;self.last_hardware=0
+        self.selected=None;self.prepared_dataset=None;self.dataset_path=None;self.checkpoint_path=None;self.history_signature=None;self.last_events=None;self.last_hardware=0;self.playground_process=None;self.playground_trial=None
         self.connect('delete-event',self.close)
         self.skin_library=SkinLibrary(skin_root or Path(__file__).resolve().parent.parent/'skin-library')
         self.skin_provider=None;self.prepared_skin=None;self.skin_id=None
@@ -207,6 +207,7 @@ class Desktop(Gtk.Window):
             combo.append('controller' if role=='mentor' else 'linear','Curriculum controller · deterministic' if role=='mentor' else 'CPU text classifier · real weight training')
             if role=='mentor':
                 combo.append('openai','OpenAI · cloud mentor');combo.append('anthropic','Anthropic · cloud mentor')
+            if role=='student':combo.append('local_lora','Local HF Qwen · real SFT + LoRA')
             combo.append('ollama','Ollama · local LLM');combo.append('compatible','Compatible API · local LLM');combo.set_active(0)
             card.pack_start(combo,False,False,0)
             url=entry('http://127.0.0.1:11434');model=Gtk.ComboBoxText.new_with_entry();model.get_child().set_placeholder_text('Discover models or enter an exact ID')
@@ -224,18 +225,27 @@ class Desktop(Gtk.Window):
             def changed(w,r=role):
                 combo,url,model,info,check=self.role_widgets[r]
                 if r=='mentor':self.invalidate_cloud_authorization()
-                external=combo.get_active_id() not in ('controller','linear')
+                external=combo.get_active_id() not in ('controller','linear','local_lora')
+                local_lora=combo.get_active_id()=='local_lora'
                 cloud=combo.get_active_id() in ('openai','anthropic')
-                url.set_sensitive(external and not cloud);model.set_sensitive(external);check.set_sensitive(external)
+                url.set_sensitive(external and not cloud);model.set_sensitive(external or local_lora);check.set_sensitive(external or local_lora)
                 if r=='mentor':
                     self.api_key.set_visible(cloud)
                     if not getattr(self,'resetting_config',False):self.api_key.set_text('')
+                if r=='student' and hasattr(self,'lora_card'):
+                    self.lora_card.set_visible(local_lora)
+                    if local_lora:
+                        if self.spins['memory_mb'].get_value_as_int()==DEFAULTS['memory_mb']:self.spins['memory_mb'].set_value(8192)
+                        if self.spins['epochs'].get_value_as_int()==DEFAULTS['epochs']:self.spins['epochs'].set_value(1)
+                if local_lora:
+                    info.set_text('Trainable local HF safetensors + tokenizer directory. Use Discover models to choose a folder; Inspect connection runs compatibility preflight. Ollama/GGUF is inference-only.');return
                 if cloud:
                     info.set_text('Official HTTPS endpoint. Discover/inspect checks metadata only; paid generation requires the authorization below.');return
                 info.set_text('Loopback only. Server and model must already be installed.' if external else
                     'Bounded algorithm; this is not an LLM mentor.' if r=='mentor' else '8,192 trainable weights · text classification only.')
             if role=='mentor':model.get_child().connect('changed',lambda _:self.invalidate_cloud_authorization())
             combo.connect('changed',changed);changed(combo)
+        self.build_lora_controls(c)
         checkpoint_row=box(8,True)
         checkpoint_row.pack_start(button('Use saved student weights…',self.choose_checkpoint),False,False,0)
         checkpoint_row.pack_start(button('Use a fresh student',self.reset_checkpoint),False,False,0)
@@ -271,6 +281,67 @@ class Desktop(Gtk.Window):
         row=box(12,True);self.run_button=button('RUN EXPERIMENT  →',self.run_new,'primary');row.pack_start(self.run_button,False,False,0)
         row.pack_start(label('Original models stay intact. Every candidate gets an evidence report.','subtitle',True),True,True,0);c.pack_start(row,False,False,0)
 
+    def build_lora_controls(self,parent):
+        from .lora import OPTIONS
+        card=self.lora_card=self.card('LOCAL GENERATIVE SFT + LORA','Optional isolated PyTorch / Transformers / PEFT worker. No downloads or model code execution. Start with short reviewed examples and a small compatible Qwen checkpoint.')
+        card.set_no_show_all(True);card.set_visible(False);parent.pack_start(card,False,False,0)
+        row=box(8,True);self.lora_device=Gtk.ComboBoxText()
+        for value in ('cpu','cuda'):self.lora_device.append(value,value.upper())
+        self.lora_device.set_active_id('cpu');row.pack_start(label('Device','subtitle'),False,False,0);row.pack_start(self.lora_device,False,False,0)
+        self.lora_precision=Gtk.ComboBoxText()
+        for value in ('fp32','fp16'):self.lora_precision.append(value,value.upper())
+        self.lora_precision.set_active_id('fp32');self.lora_precision.set_sensitive(False)
+        self.lora_device.connect('changed',lambda *_:self.change_lora_device())
+        row.pack_start(label('Precision','subtitle'),False,False,0);row.pack_start(self.lora_precision,False,False,0);card.pack_start(row,False,False,0)
+        self.lora_license=entry();self.lora_license.set_placeholder_text('Base model license / permission reviewed by you (required)');card.pack_start(self.lora_license,False,False,0)
+        grid=Gtk.Grid(column_spacing=12,row_spacing=8);self.lora_spins={}
+        for i,(key,title,low,high) in enumerate((('max_length','Context cap',32,2048),('max_steps','Optimizer step cap',1,1000),('rank','LoRA rank',1,64),('alpha','LoRA alpha',1,128),('accumulation','Accumulation',1,32),('max_new_tokens','Generation cap',1,256))):
+            spin=Gtk.SpinButton.new_with_range(low,high,1);spin.set_value(OPTIONS[key]);self.lora_spins[key]=spin
+            grid.attach(label(title,'subtitle'),i%3,(i//3)*2,1,1);grid.attach(spin,i%3,(i//3)*2+1,1,1)
+        card.pack_start(grid,False,False,0)
+        self.lora_rate=entry(str(OPTIONS['learning_rate']));card.pack_start(label('Learning rate','subtitle'),False,False,0);card.pack_start(self.lora_rate,False,False,0)
+        self.style_prompt=entry('');self.style_prompt.set_placeholder_text('Personality Forge: desired style/system prompt (optional, ≤2,000 characters)')
+        parent.pack_start(label('Personality Forge · optional style/system prompt (prompt-only baseline or LoRA)','subtitle',True),False,False,0)
+        parent.pack_start(self.style_prompt,False,False,0)
+        card.pack_start(button('Use editable collaborator example seed',self.edit_instructions),False,False,0)
+        card.pack_start(button('Check actual training compatibility',self.lora_preflight),False,False,0)
+        self.lora_status=label('CPU FP32 default. CUDA/FP16 require runtime verification. No BF16, FlashAttention, QLoRA, auto offloading or optimizer-state resume in this initial backend.','subtitle',True)
+        card.pack_start(self.lora_status,False,False,0)
+        card.set_no_show_all(False);card.show_all();card.hide();card.set_no_show_all(True)
+
+    def change_lora_device(self):
+        cpu=self.lora_device.get_active_id()=='cpu'
+        if cpu:self.lora_precision.set_active_id('fp32')
+        self.lora_precision.set_sensitive(not cpu)
+
+    def lora_options(self):
+        from .lora import checked
+        return checked({'device':self.lora_device.get_active_id(),'precision':self.lora_precision.get_active_id(),
+                        'model_license':self.lora_license.get_text().strip(),'learning_rate':float(self.lora_rate.get_text()),
+                        'system_prompt':self.style_prompt.get_text().strip(),**{key:w.get_value_as_int() for key,w in self.lora_spins.items()}})
+
+    def lora_preflight(self):
+        import subprocess
+        from .lora import python_executable
+        from .security import subprocess_environment
+        try:
+            options=self.lora_options();model=self.role_widgets['student'][2].get_child().get_text().strip();memory=self.spins['memory_mb'].get_value_as_int()
+            if not model:raise ValueError('Choose a local HF checkpoint folder first.')
+        except Exception as error:self.lora_status.set_text(redact(str(error)));return
+        command=[python_executable(),'-m','overmind','lora-preflight','--runtime','--model',model,'--model-license',options['model_license'],
+                 '--device',options['device'],'--precision',options['precision'],'--max-length',str(options['max_length']),'--memory-mb',str(memory)]
+        env=subprocess_environment();env.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',OMP_NUM_THREADS='2',OPENBLAS_NUM_THREADS='2')
+        self.lora_status.set_text('Checking the isolated training interpreter and actual runtime…')
+        def work():
+            result=subprocess.run(command,capture_output=True,text=True,timeout=30,env=env,cwd=Path(__file__).resolve().parent.parent)
+            return result.stdout or result.stderr or 'Preflight exited without diagnostics.'
+        self.background(work,lambda result,error:self.lora_status.set_text(error or result))
+
+    def edit_instructions(self):
+        from .sft_data import example
+        self.populate_workshop(example());self.tabs.set_current_page(3)
+        self.message('Original collaborator examples loaded for review. Edit targets/splits, then Validate & use reviewed data. The seed is not evidence of model quality.')
+
     def live_tab(self):
         c=self.live_content=self.page('02   Laboratory')
         self.run_title=label('No experiment selected','title');c.pack_start(self.run_title,False,False,0)
@@ -297,7 +368,7 @@ class Desktop(Gtk.Window):
         self.artifact_label=label('Candidates, dataset snapshots, raw predictions and reports are saved locally.','subtitle',True);c.pack_start(self.artifact_label,False,False,0)
         c.pack_start(button('Export private evidence bundle…',self.export_evidence_bundle),False,False,0)
         self.artifact_choice=Gtk.ComboBoxText()
-        for name in ('report.json','training-integrity.json','training-metrics.json','candidate-validation.json','candidate.json','baseline-validation.json','latest-validation.json','baseline-test.json','candidate-test.json','promoted.json','billing.json'):
+        for name in ('report.json','training-integrity.json','training-metrics.json','candidate-validation.json','candidate.json','baseline-validation.json','latest-validation.json','baseline-test.json','candidate-test.json','promoted.json','billing.json','preflight.json','base-model.json','checkpoint.json','stock-test.json','environment.json'):
             self.artifact_choice.append_text(name)
         self.artifact_choice.set_active(0);self.artifact_choice.connect('changed',lambda _:self.show_artifact())
         c.pack_start(self.artifact_choice,False,False,0)
@@ -307,6 +378,119 @@ class Desktop(Gtk.Window):
         self.try_input=entry('I need a refund for a duplicate charge');trial.pack_start(self.try_input,False,False,0)
         trial.pack_start(button('Classify with candidate',self.try_candidate),False,False,0)
         self.try_result=label('—','subtitle',True);trial.pack_start(self.try_result,False,False,0);c.pack_start(trial,False,False,0)
+        self.playground_controls(c)
+
+    def playground_controls(self,parent):
+        card=self.card('PERSONALITY PLAYGROUND','Manual matched-prompt comparison. Stock, prompted and trained responses are distinct. Human ratings are independent axes, not automatic claims of factual improvement.')
+        self.playground_prompt=entry('How should we investigate a stubborn software bug?');card.pack_start(self.playground_prompt,False,False,0)
+        row=box(8,True)
+        row.pack_start(button('Compare selected LoRA checkpoint',self.run_playground),False,False,0)
+        row.pack_start(button('Prompt-only baseline on configured local endpoint',self.run_prompt_playground),False,False,0)
+        row.pack_start(button('Cancel comparison',self.cancel_playground),False,False,0);card.pack_start(row,False,False,0)
+        responses=box(8,True);self.playground_responses={}
+        for key,title in (('stock','STOCK · no style prompt'),('prompted','PROMPTED · weights unchanged'),('adapter','ADAPTER · persistent weight updates')):
+            column=box(8);column.set_hexpand(True);column.pack_start(label(title,'eyebrow',True),False,False,0)
+            view=Gtk.TextView();view.set_editable(False);view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+            view.get_buffer().set_text('No measured response yet.')
+            pane=scroll(view);pane.set_size_request(180,220);column.pack_start(pane,True,True,0);responses.pack_start(column,True,True,0)
+            self.playground_responses[key]=view
+        card.pack_start(responses,True,True,0)
+        self.playground_output=Gtk.TextView();self.playground_output.set_editable(False);self.playground_output.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        sc=scroll(self.playground_output);sc.set_size_request(-1,100);card.pack_start(sc,False,False,0)
+        self.feedback_axes={};grid=Gtk.Grid(column_spacing=12,row_spacing=8)
+        for col,axis in enumerate(('style','instruction','technical','consistency')):
+            spin=Gtk.SpinButton.new_with_range(0,5,1);grid.attach(label(axis+' · 0=unrated','subtitle'),col,0,1,1);grid.attach(spin,col,1,1,1);self.feedback_axes[axis]=spin
+        card.pack_start(grid,False,False,0)
+        self.feedback_notes=entry();self.feedback_notes.set_placeholder_text('Human feedback about the adapter/prompted response; notes about factual errors and regressions')
+        card.pack_start(self.feedback_notes,False,False,0);card.pack_start(button('Save human feedback to selected experiment',self.save_playground_feedback),False,False,0)
+        parent.pack_start(card,False,False,0)
+
+    def render_playground(self,result,error=None):
+        if error:
+            for view in self.playground_responses.values():view.get_buffer().set_text('Unavailable: comparison did not complete.')
+            self.playground_output.get_buffer().set_text(error);return
+        for key,view in self.playground_responses.items():
+            response=result.get(key)
+            view.get_buffer().set_text(response if response is not None else 'Unavailable: this was prompt-only customization; no adapter was trained.')
+        self.playground_output.get_buffer().set_text(json.dumps({key:value for key,value in result.items() if key not in ('stock','prompted','adapter')},indent=2,ensure_ascii=False))
+
+    def cancel_playground(self):
+        if getattr(self,'playground_cancel',None):self.playground_cancel.set()
+        if self.playground_process and self.playground_process.poll() is None:
+            self.playground_process.terminate()
+            try:self.playground_process.wait(timeout=1)
+            except Exception:self.playground_process.kill()
+        self.playground_process=None
+
+    def run_playground(self):
+        import subprocess
+        from .lora import python_executable
+        from .security import subprocess_environment
+        try:
+            if not self.selected:raise ValueError('Select a completed LoRA experiment first.')
+            if self.manager.process and self.manager.process.poll() is None:raise ValueError('Finish or stop training before local checkpoint generation.')
+            if self.playground_process and self.playground_process.poll() is None:raise ValueError('A comparison is already running; cancel it first.')
+            run=self.store.get(self.selected)
+            if run['status']!='completed' or run['config']['student']['kind']!='local_lora':raise ValueError('Select a completed LoRA experiment. For a fast prompt-only baseline, configure an existing Ollama/compatible local model.')
+            prompt=self.playground_prompt.get_text().strip()
+            if not 0<len(prompt)<=4000:raise ValueError('Enter a prompt of at most 4,000 characters.')
+            rid=self.selected;self.playground_trial=None
+            for w in self.feedback_axes.values():w.set_value(0)
+            self.feedback_notes.set_text('')
+            env=subprocess_environment();env.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',OMP_NUM_THREADS='2',OPENBLAS_NUM_THREADS='2')
+            self.playground_process=subprocess.Popen([python_executable(),'-m','overmind','--data',str(self.store.root),'playground',rid,prompt,'--runtime'],
+                stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,env=env,cwd=Path(__file__).resolve().parent.parent)
+            process=self.playground_process
+            self.playground_output.get_buffer().set_text('Generating stock / prompted / adapter responses locally. CPU generation may be slow; Cancel comparison stops this process.')
+            def work():
+                try:out,err=process.communicate(timeout=run['config']['minutes']*60)
+                except subprocess.TimeoutExpired:process.kill();process.communicate();raise ValueError('Comparison time budget reached.')
+                if process.returncode:raise ValueError(err or 'Comparison cancelled or failed; no result is claimed.')
+                return json.loads(out)
+            def done(result,error):
+                self.playground_trial=result if not error else None
+                self.render_playground(result,error)
+            self.background(work,done)
+        except Exception as error:self.playground_output.get_buffer().set_text(redact(str(error)))
+
+    def run_prompt_playground(self):
+        try:
+            cfg=self.role_config('student')
+            if cfg['kind'] not in ('ollama','compatible'):raise ValueError('Choose an existing Ollama/compatible local model in Configure. No checkpoint, download or fine-tuning is needed for this prompt-only baseline.')
+            prompt=self.playground_prompt.get_text().strip();style=self.style_prompt.get_text().strip()
+            if not 0<len(prompt)<=4000 or not style:raise ValueError('Enter a playground prompt and a desired style/system prompt in Configure’s LoRA/Personality form.')
+            rid=self.selected
+            if not rid:raise ValueError('Select an experiment to attach this manual comparison and feedback.')
+            if getattr(self,'prompt_playground_busy',False):raise ValueError('A bounded prompt comparison is already running.')
+            p=provider(cfg);self.prompt_playground_busy=True;self.playground_trial=None
+            self.playground_cancel=threading.Event();cancel=self.playground_cancel
+            for w in self.feedback_axes.values():w.set_value(0)
+            self.feedback_notes.set_text('')
+            self.playground_output.get_buffer().set_text('Running two explicit local endpoint requests. Prompt-only baseline: model weights stay unchanged.')
+            def work():
+                stock=p.generate('',prompt,128)
+                if cancel.is_set():raise ValueError('Comparison cancelled. The accepted local request finished, but no second request was made.')
+                custom=p.generate(style,prompt,128)
+                if cancel.is_set():raise ValueError('Comparison cancelled. Accepted local requests may have finished; no comparison was saved.')
+                trial={'experiment':rid,'mode':'prompt_only','model':cfg,'prompt':prompt,'system_prompt':style,'stock':stock,'prompted':custom,'adapter':None,'timestamp':time.time()}
+                name=f'playground-{time.time_ns()}.json';self.store.artifact(rid,name,trial)
+                return {**trial,'artifact':name}
+            def done(result,error):
+                self.prompt_playground_busy=False;self.playground_trial=result if not error else None
+                self.render_playground(result,error)
+            self.background(work,done)
+        except Exception as error:self.playground_output.get_buffer().set_text(redact(str(error)))
+
+    def save_playground_feedback(self):
+        try:
+            trial=self.playground_trial
+            if not trial or trial['experiment']!=self.selected:raise ValueError('Generate a comparison for the selected experiment before rating it.')
+            feedback={'trial':trial['artifact'],'rated_response':'adapter' if trial['mode']=='lora' else 'prompted',
+                      'ratings':{axis:w.get_value_as_int() or None for axis,w in self.feedback_axes.items()},'notes':self.feedback_notes.get_text()[:4000],
+                      'notice':'User-entered ordinal ratings (1–5); zero/unrated saved as null. Not independent automated correctness measurements.','timestamp':time.time()}
+            self.store.artifact(self.selected,f'feedback-{time.time_ns()}.json',feedback)
+            self.message('Human feedback saved with its comparison; axes remain separate.')
+        except Exception as error:self.message(redact(str(error)))
 
     def workshop_tab(self):
         c=self.page('04   Dataset Workshop')
@@ -321,6 +505,7 @@ class Desktop(Gtk.Window):
         actions=box(8,True)
         actions.pack_start(button('Import labeled file…',self.import_dataset),False,False,0)
         actions.pack_start(button('Load benchmark into editor',self.edit_benchmark),False,False,0)
+        actions.pack_start(button('Load instruction seed',self.edit_instructions),False,False,0)
         c.pack_start(actions,False,False,0)
         self.dataset_editor=Gtk.TextView();self.dataset_editor.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         self.dataset_editor.set_monospace(True)
@@ -338,6 +523,8 @@ class Desktop(Gtk.Window):
 
     def populate_workshop(self,data):
         from .workshop import editable_jsonl,summary
+        if data.get('format')=='gafaw.sft.v1':
+            from .sft_data import editable_jsonl
         self.workshop_data=data
         self.workshop_license.set_text(data['license'])
         self.dataset_editor.get_buffer().set_text(editable_jsonl(data))
@@ -361,6 +548,9 @@ class Desktop(Gtk.Window):
         buffer=self.dataset_editor.get_buffer()
         text=buffer.get_text(buffer.get_start_iter(),buffer.get_end_iter(),True)
         previous=self.workshop_data
+        if previous and previous.get('format')=='gafaw.sft.v1':
+            from .sft_data import reviewed_jsonl
+            return reviewed_jsonl(text,self.workshop_license.get_text().strip(),previous['name'],previous)
         data=prepare(rows_from_text(text,'jsonl'),self.workshop_license.get_text().strip(),
                      previous.get('name','Reviewed dataset') if previous else 'Reviewed dataset',self.split_seed.get_value_as_int())
         if previous:
@@ -491,6 +681,7 @@ class Desktop(Gtk.Window):
     def role_config(self,role):
         combo,url,model,_,_=self.role_widgets[role]
         kind=combo.get_active_id()
+        if kind=='local_lora':return {'kind':kind,'model':model.get_child().get_text().strip()}
         if kind in ('openai','anthropic'):
             if self.api_key.get_text():register(kind,self.api_key.get_text())
             return {'kind':kind,'model':model.get_child().get_text().strip()}
@@ -508,6 +699,7 @@ class Desktop(Gtk.Window):
         threading.Thread(target=task,daemon=True).start()
 
     def check_connection(self,role):
+        if role=='student' and self.role_widgets[role][0].get_active_id()=='local_lora':self.lora_preflight();return
         try:
             config=self.role_config(role);p=provider(config)
         except Exception as e:self.role_widgets[role][3].set_text(redact(str(e)));return
@@ -518,6 +710,11 @@ class Desktop(Gtk.Window):
 
     def discover_models(self,role):
         combo,url,model,info,_=self.role_widgets[role];kind=combo.get_active_id()
+        if kind=='local_lora':
+            dialog=Gtk.FileChooserDialog(title='Select regular-file HF Qwen checkpoint directory',parent=self,action=Gtk.FileChooserAction.SELECT_FOLDER)
+            dialog.add_buttons('Cancel',Gtk.ResponseType.CANCEL,'Select',Gtk.ResponseType.OK)
+            if dialog.run()==Gtk.ResponseType.OK:model.get_child().set_text(dialog.get_filename())
+            dialog.destroy();return
         if kind in ('linear','controller'):info.set_text('Built-in role; no discovery required.');return
         if kind in ('openai','anthropic'):
             if self.api_key.get_text():register(kind,self.api_key.get_text())
@@ -584,6 +781,10 @@ class Desktop(Gtk.Window):
             for key,field in self.cloud_fields.items():field.set_text(CLOUD_FORM_DEFAULTS[key])
             self.cloud_authorized.set_active(False);self.cloud_sharing.set_active(False);self.consent.set_active(False)
             self.reset_dataset();self.reset_checkpoint()
+            from .lora import OPTIONS
+            for key,w in self.lora_spins.items():w.set_value(OPTIONS[key])
+            self.lora_device.set_active_id('cpu');self.lora_precision.set_active_id('fp32')
+            self.lora_rate.set_text(str(OPTIONS['learning_rate']));self.lora_license.set_text('');self.style_prompt.set_text('')
         finally:self.resetting_config=False
         self.message('Next experiment reset to factory defaults. Credentials, skin and saved experiments preserved.')
 
@@ -599,11 +800,12 @@ class Desktop(Gtk.Window):
             c={**DEFAULTS,'objective':self.objective.get_text().strip(),'mentor':self.role_config('mentor'),'student':self.role_config('student'),
                 'attempts':self.attempts.get_value_as_int(),
                 **{key:spin.get_value_as_int() for key,spin in self.spins.items()}}
+            if c['student']['kind']=='local_lora':c['lora']=self.lora_options()
             if c['mentor']['kind'] in ('openai','anthropic'):
                 c['cloud']={key:w.get_text().strip() for key,w in self.cloud_fields.items()}
                 c['cloud']['max_output_tokens']=int(c['cloud']['max_output_tokens'])
                 c['cloud'].update(authorized=self.cloud_authorized.get_active(),data_sharing=self.cloud_sharing.get_active())
-            if (c['mentor']['kind']!='controller' or c['student']['kind']!='linear') and not self.consent.get_active():
+            if (c['mentor']['kind']!='controller' or c['student']['kind'] not in ('linear','local_lora')) and not self.consent.get_active():
                 raise ValueError('Enable the local dataset-sharing permission before connecting an external model server.')
             c=config_checked(c);dataset=self.prepared_dataset or load(self.dataset_path)
             rid=self.store.create(c,dataset);self.selected=rid;self.load_notes();self.manager.start(rid)
@@ -648,18 +850,18 @@ class Desktop(Gtk.Window):
         if not self.selected:return
         run=self.store.get(self.selected);s=run['state'];cfg=run['config'];report=s.get('report')
         self.run_title.set_text('Experiment '+self.selected)
-        method='Weight training · CPU softmax classifier' if cfg['student']['kind']=='linear' else 'Prompt / retrieval optimization · base weights unchanged'
+        method='Generative SFT + LoRA · exact-reference match (not factual/style grading)' if cfg['student']['kind']=='local_lora' else 'Weight training · CPU softmax classifier' if cfg['student']['kind']=='linear' else 'Prompt / retrieval optimization · base weights unchanged'
         bill=self.store.billing(self.selected)
         spending=(f' · cloud ${bill["charged_or_reserved_usd"]:.6f} / ${cfg["cloud"]["budget_usd"]} · tokens {bill["input_tokens"]} in / {bill["output_tokens"]} out · uncertain {bill["uncertain_calls"]}') if cfg.get('cloud') else ''
         self.run_detail.set_text(f'{cfg["objective"]}\n{method}  ·  phase: {s["phase"]}  ·  calls reserved: {s["calls"]}/{cfg["max_calls"]}'+spending)
         self.metrics['status'].set_text(run['status'].capitalize())
         self.metrics['baseline'].set_text(f'{report["baseline_accuracy"]:.1%}' if report else f'{s["baseline_validation"]:.1%} val' if 'baseline_validation' in s else '—')
         self.metrics['candidate'].set_text(f'{report["candidate_accuracy"]:.1%}' if report else f'{s["best_validation"]:.1%} val' if s.get('best_validation',-1)>=0 else '—')
-        fraction=1 if run['status']=='completed' else min(.85,s.get('epoch',0)/cfg['epochs']*.8) if cfg['student']['kind']=='linear' else min(.85,s.get('attempt',0)/cfg['attempts']*.8)
-        self.progress.set_fraction(fraction);self.progress.set_text(f'{s["phase"].capitalize()} · epoch {s.get("epoch",0)}/{cfg["epochs"]}' if cfg['student']['kind']=='linear' else f'{s["phase"].capitalize()} · prompt candidate {s.get("attempt",0)}/{cfg["attempts"]}')
+        fraction=1 if run['status']=='completed' else min(.85,s.get('epoch',0)/cfg['epochs']*.8) if cfg['student']['kind'] in ('linear','local_lora') else min(.85,s.get('attempt',0)/cfg['attempts']*.8)
+        self.progress.set_fraction(fraction);self.progress.set_text(f'{s["phase"].capitalize()} · epoch {s.get("epoch",0)}/{cfg["epochs"]}' if cfg['student']['kind'] in ('linear','local_lora') else f'{s["phase"].capitalize()} · prompt candidate {s.get("attempt",0)}/{cfg["attempts"]}')
         own=self.manager.rid==self.selected and self.manager.process and self.manager.process.poll() is None
         self.pause_button.set_sensitive(bool(own and run['status']=='running'));self.stop_button.set_sensitive(bool(own))
-        self.resume_button.set_sensitive(bool(run['status']=='interrupted' or (own and run['status']=='paused')))
+        self.resume_button.set_sensitive(bool((run['status']=='interrupted' and cfg['student']['kind']!='local_lora') or (own and run['status']=='paused')))
         events=self.store.events(self.selected);sig=(self.selected,events[-1]['seq'] if events else 0)
         if sig!=self.last_events:
             self.last_events=sig
@@ -672,7 +874,9 @@ class Desktop(Gtk.Window):
                 loader=GdkPixbuf.PixbufLoader.new_with_type('svg');loader.write(chart.encode());loader.close()
                 self.loss_image.set_from_pixbuf(loader.get_pixbuf())
             else:self.loss_image.clear()
-        if report:
+        if report and report.get('method')=='sft_lora':
+            self.verification.set_text(f'ADAPTER VERIFIED · held-out response NLL {report["baseline_nll"]:.4f} → {report["candidate_nll"]:.4f} · exact match {report["baseline_accuracy"]:.1%} → {report["candidate_accuracy"]:.1%}\n'+report['policy']+'\n'+report['scope'])
+        elif report:
             self.verification.set_text(('PROMOTED' if report['promoted'] else 'NOT PROMOTED')+f' · {report["baseline_accuracy"]:.1%} → {report["candidate_accuracy"]:.1%} · paired p = {report["p_one_sided"]:.5f}\n'+report['policy']+'\n'+report['scope'])
         else:self.verification.set_text('No final evidence yet. Validation measurements are used for selection; held-out results decide promotion.')
         self.artifact_label.set_text('Artifact directory: '+str(self.store.root/self.selected))
@@ -706,6 +910,8 @@ class Desktop(Gtk.Window):
             if not self.selected:raise ValueError('Select an experiment first.')
             artifact=self.store.read(self.selected,'candidate.json');text=self.try_input.get_text()
             if not 0<len(text)<=4000:raise ValueError('Enter 1–4000 characters.')
+            if artifact['format']=='gafaw.lora.v1':
+                self.try_result.set_text('Use Personality Playground below for matched stock / prompted / reloaded-adapter generation.');return
             if artifact['format']=='overmind.softmax.v1':self.try_result.set_text(TextStudent.restore(artifact).predict(text))
             else:
                 from .inference import predict_artifact
@@ -714,7 +920,7 @@ class Desktop(Gtk.Window):
         except Exception as e:self.try_result.set_text(redact(str(e)))
 
     def close(self,*_):
-        self.manager.stop();Gtk.main_quit();return False
+        self.cancel_playground();self.manager.stop();Gtk.main_quit();return False
 
 def launch(root):
     harden_process()

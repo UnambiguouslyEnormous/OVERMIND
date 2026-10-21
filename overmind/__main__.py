@@ -55,8 +55,29 @@ def _main():
     check_bundle.add_argument('path')
     comparison=commands.add_parser('compare',help='Compare two completed runs using recorded evidence')
     comparison.add_argument('left');comparison.add_argument('right')
+    preflight=commands.add_parser('lora-preflight',help='Check an existing local Qwen checkpoint and the isolated optional ML runtime')
+    preflight.add_argument('--model',required=True);preflight.add_argument('--model-license',required=True)
+    preflight.add_argument('--device',choices=['cpu','cuda'],default='cpu');preflight.add_argument('--precision',choices=['fp32','fp16'],default='fp32')
+    preflight.add_argument('--max-length',type=int,default=256);preflight.add_argument('--memory-mb',type=int,default=8192)
+    preflight.add_argument('--runtime',action='store_true',help=argparse.SUPPRESS)
+    commands.add_parser('example-instructions',help='Print original CC0 instruction dataset with explicit splits for review')
+    playground=commands.add_parser('playground',help='Generate matched stock/prompted/adapter responses for a completed local LoRA run')
+    playground.add_argument('id');playground.add_argument('prompt');playground.add_argument('--runtime',action='store_true',help=argparse.SUPPRESS)
     args=parser.parse_args()
     try:
+        if args.command=='example-instructions':
+            from .sft_data import example
+            print(json.dumps(example(),indent=2));return 0
+        if args.command=='lora-preflight':
+            from .lora import preflight,python_executable
+            if not args.runtime:
+                import subprocess
+                from .security import subprocess_environment
+                env=subprocess_environment();env.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',OMP_NUM_THREADS='2',OPENBLAS_NUM_THREADS='2')
+                result=subprocess.run([python_executable(),'-m','overmind',*sys.argv[1:],'--runtime'],env=env,timeout=30)
+                return result.returncode
+            result=preflight(args.model,{'model_license':args.model_license,'device':args.device,'precision':args.precision,'max_length':args.max_length},args.memory_mb,runtime=True)
+            print(json.dumps(redact(result),indent=2));return 0 if result['ready'] else 2
         if args.command=='check-bundle':
             from .bundle import validate_bundle
             print(json.dumps(redact(validate_bundle(args.path)),indent=2));return 0
@@ -87,6 +108,15 @@ def _main():
             artifact=json.loads(path.read_text())
             print(predict_artifact(artifact,args.text,args.allow_local_inference));return 0
         store=Store(args.data)
+        if args.command=='playground':
+            if not args.runtime:
+                import subprocess
+                from .lora import python_executable
+                from .security import subprocess_environment
+                env=subprocess_environment();env.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',OMP_NUM_THREADS='2',OPENBLAS_NUM_THREADS='2')
+                return subprocess.run([python_executable(),'-m','overmind',*sys.argv[1:],'--runtime'],env=env,timeout=store.get(args.id)['config']['minutes']*60).returncode
+            from .lora import playground
+            print(json.dumps(redact(playground(store,args.id,args.prompt)),indent=2));return 0
         if args.command=='export-bundle':
             from .bundle import export_bundle
             print(json.dumps(export_bundle(store,args.id,args.output,args.include_dataset,args.include_weights),indent=2));return 0
@@ -105,7 +135,15 @@ def _main():
             c=json.loads(Path(args.config).read_text()) if args.config else dict(DEFAULTS)
             if args.epochs is not None:c['epochs']=args.epochs
             rid=store.create(config_checked(c),load(args.dataset));print('Experiment:',rid,flush=True)
-            result=worker(args.data,rid)
+            if c.get('student',{}).get('kind')=='local_lora':
+                from .lab import Manager
+                import time
+                manager=Manager(args.data);manager.start(rid)
+                try:
+                    while manager.process.poll() is None:manager.poll();time.sleep(.2)
+                    manager.poll();result=manager.process.returncode
+                except KeyboardInterrupt:manager.stop();raise
+            else:result=worker(args.data,rid)
             run=store.get(rid);print('Status:',run['status'])
             if 'report' in run['state']:print(json.dumps(redact(run['state']['report']),indent=2))
             else:

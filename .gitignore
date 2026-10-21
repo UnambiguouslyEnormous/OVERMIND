@@ -55,3 +55,6 @@ secrets.env
 /docs/evidence/
 # Locally installed declarative skins and selection.
 /skin-library/
+
+# User-provisioned optional training runtime; never installed automatically.
+.venv-llm/

@@ -107,6 +107,9 @@ def import_file(path, license, seed=42):
 
 def summary(data):
     validate(data)
+    if data.get('format')=='gafaw.sft.v1':
+        return {'name':data['name'],'format':data['format'],'fingerprint':digest(data),'license':data['license'],
+                'splits':{s:{'count':len(data[s])} for s in SPLITS},'notice':'Instruction/response data: explicit reviewed splits; real tokenizer counts are measured in the training worker.'}
     return {'name': data.get('name'), 'fingerprint': digest(data), 'license': data['license'],
             'splits': {split: {'count': len(data[split]), 'labels': dict(Counter(row['target'] for row in data[split]))} for split in SPLITS},
             'estimated_tokens': sum(max(1, (len(row['input']) + 3)//4) for split in SPLITS for row in data[split]),

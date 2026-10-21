@@ -1,0 +1,5 @@
+# Install a hardware-compatible PyTorch build separately, then these in .venv-llm.
+# Initial supported API range. Physical GPU compatibility still requires runtime preflight.
+transformers>=4.45,<5
+peft>=0.13,<0.19
+safetensors>=0.4,<1

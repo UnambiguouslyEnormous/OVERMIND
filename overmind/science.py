@@ -33,7 +33,9 @@ def compare(store,left,right):
         output['results'].append({'id':rid,'method':report['method'],'baseline_accuracy':report['baseline_accuracy'],
                                   'candidate_accuracy':report['candidate_accuracy'],'correct':correct,'count':test['count'],
                                   'accuracy_wilson_95':wilson(correct,test['count']),'promoted':report['promoted'],
-                                  'dataset_sha256':report['dataset_sha256'],'candidate_sha256':report['candidate_sha256']})
+                                  'dataset_sha256':report['dataset_sha256'],'candidate_sha256':report['candidate_sha256'],
+                                  'metric':'generative exact-reference match' if report['method']=='sft_lora' else 'exact-label accuracy',
+                                  **({'response_nll':test['response_nll']} if 'response_nll' in test else {})})
     output['accuracy_difference']=b['candidate_accuracy']-a['candidate_accuracy'] if comparable else None
     if not comparable:output['warning']='Different dataset fingerprints or methods: no fair score difference is reported.'
     return output

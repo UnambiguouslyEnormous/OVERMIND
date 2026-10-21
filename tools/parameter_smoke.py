@@ -26,6 +26,8 @@ def value(w):
 
 with tempfile.TemporaryDirectory() as temporary:
     app=Desktop(Path(temporary)/'lab',skin_root=Path(temporary)/'skins');app.show_all();pump()
+    app.role_widgets['student'][0].set_active_id('local_lora');pump()
+    assert app.lora_card.get_visible() and app.lora_device.get_mapped(),'Optional training controls must be visible'
     tested=0;scrolled=0
     for page in range(app.tabs.get_n_pages()):
         app.tabs.set_current_page(page);pump()
@@ -42,10 +44,11 @@ with tempfile.TemporaryDirectory() as temporary:
                 event.direction=direction;event.delta_y=1;event.delta_x=0
                 control.emit('scroll-event',event)
                 pump();assert value(control)==before,(page,type(control).__name__,before,value(control))
-            if ancestor and adjustment.get_upper()>adjustment.get_page_size():
-                assert adjustment.get_value()>old_scroll,'Containing page did not scroll'
+            if ancestor and control.get_mapped() and control.get_sensitive() and adjustment.get_upper()>adjustment.get_page_size():
+                assert adjustment.get_value()>old_scroll,f'Containing page did not scroll: page {page}, {type(control).__name__}'
                 scrolled+=1
             tested+=1
+    app.reset_configuration()
     app.tabs.set_current_page(0);pump()
     spin=app.spins['epochs'];spin.grab_focus()
     Gtk.bindings_activate(spin,Gdk.KEY_Up,Gdk.ModifierType(0));assert spin.get_value_as_int()==19
@@ -58,6 +61,7 @@ with tempfile.TemporaryDirectory() as temporary:
     for key,w in app.spins.items():w.set_value(w.get_adjustment().get_upper())
     for w in app.cloud_fields.values():w.set_text('99')
     app.cloud_authorized.set_active(True);app.cloud_sharing.set_active(True);app.consent.set_active(True)
+    app.lora_spins['rank'].set_value(32);app.lora_license.set_text('fixture permission');app.style_prompt.set_text('fixture style')
     skin=app.skin_id;app.reset_configuration()
     assert app.api_key.get_text()=='fixture-reset-preserved'
     assert app.skin_id==skin and app.selected is None and not app.store.list()
@@ -69,6 +73,10 @@ with tempfile.TemporaryDirectory() as temporary:
         assert combo.get_active_id()==DEFAULTS[role]['kind'] and not model.get_child().get_text()
         assert url.get_text()=='http://127.0.0.1:11434'
     for key,w in app.cloud_fields.items():assert w.get_text()==CLOUD_FORM_DEFAULTS[key]
+    from overmind.lora import OPTIONS
+    for key,w in app.lora_spins.items():assert w.get_value_as_int()==OPTIONS[key]
+    assert app.lora_device.get_active_id()=='cpu' and app.lora_precision.get_active_id()=='fp32'
+    assert not app.lora_license.get_text() and not app.style_prompt.get_text()
     assert not any(w.get_active() for w in (app.cloud_authorized,app.cloud_sharing,app.consent))
     app.manager.stop();app.destroy()
 print(f'GTK parameter smoke passed: {tested} controls, {scrolled} scrolling contexts; deliberate edits and complete reset verified.')

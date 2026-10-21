@@ -36,3 +36,22 @@ class BundleTests(unittest.TestCase):
             with zipfile.ZipFile(path,'w') as archive:
                 archive.writestr('manifest.json',json.dumps(manifest));archive.writestr('report.json','{"modified":true}')
             with self.assertRaisesRegex(ValueError,'checksum'):validate_bundle(path)
+
+class LoraRecordedStore(RecordedStore):
+    def get(self,rid):return {'status':'completed','config':{'student':{'kind':'local_lora'}}}
+    def read(self,rid,name):
+        if name in ('baseline-test.json','candidate-test.json','stock-test.json'):
+            return {'accuracy':0,'count':1,'results':[{'input':'PRIVATE PROMPT','target':'PRIVATE REFERENCE','prediction':'PRIVATE GENERATION','correct':False,'axis':'style'}]}
+        return super().read(rid,name)
+
+class GenerativeBundleTests(unittest.TestCase):
+    def test_minimized_bundle_hashes_reference_and_generated_text_too(self):
+        with tempfile.TemporaryDirectory() as root:
+            path=Path(root)/'sft.zip';export_bundle(LoraRecordedStore(),'fixture',path)
+            validate_bundle(path)
+            with zipfile.ZipFile(path) as archive:
+                raw=archive.read('candidate-test.json')
+                self.assertNotIn(b'PRIVATE',raw)
+                row=json.loads(raw)['results'][0]
+                self.assertNotIn('target',row);self.assertNotIn('prediction',row)
+                self.assertEqual(len(row['target_sha256']),64)

@@ -27,7 +27,7 @@ DEFAULTS = {'objective':'Route support requests into account, billing, security,
 
 def config_checked(config):
     reject_secrets(config)
-    if not isinstance(config,dict) or set(config)-set(DEFAULTS)-{'cloud'}:raise ValueError('Unknown experiment configuration fields.')
+    if not isinstance(config,dict) or set(config)-set(DEFAULTS)-{'cloud','lora'}:raise ValueError('Unknown experiment configuration fields.')
     for role in ('mentor','student'):
         if role in config and (not isinstance(config[role],dict) or set(config[role])-{'kind','url','model','checkpoint'}):raise ValueError('Unknown model configuration fields.')
     c = copy.deepcopy(DEFAULTS)
@@ -35,6 +35,15 @@ def config_checked(config):
     for key,lo,hi in [('epochs',1,60),('attempts',1,8),('max_calls',1,2000),('minutes',1,120),('memory_mb',128,16384)]:
         if type(c[key]) is not int or not lo <= c[key] <= hi: raise ValueError(f'{key} must be an integer between {lo} and {hi}.')
     if not isinstance(c['objective'],str) or not 1 <= len(c['objective'].strip()) <= 2000: raise ValueError('Enter an objective of at most 2000 characters.')
+    if c['student']['kind']=='local_lora':
+        from .lora import checked
+        if c['mentor']!={'kind':'controller'}:raise ValueError('Initial local LoRA uses reviewed examples and a fixed plan; choose Curriculum controller. No mentor API is called.')
+        if set(c['student'])!={'kind','model'} or not isinstance(c['student']['model'],str) or not 0<len(c['student']['model'])<=4096:raise ValueError('Choose the local HF checkpoint directory for LoRA.')
+        c['lora']=checked(c.get('lora',{}))
+        if c.get('allow_synthetic'):raise ValueError('LoRA requires reviewed training data, not automatic synthetic lessons.')
+        if c.get('cloud'):raise ValueError('Local LoRA does not accept cloud configuration.')
+        return c
+    if 'lora' in c:raise ValueError('LoRA options require a local_lora student.')
     if c['student']['kind'] in ('openai','anthropic'):raise ValueError('Cloud providers are mentor-only; the student must remain local.')
     if c['mentor']['kind'] in ('openai','anthropic'):
         c['cloud']=cloud_limits(c.get('cloud'))
@@ -90,6 +99,8 @@ class Experiment:
 
     def guard(self):
         elapsed=self.elapsed+time.monotonic()-self.start
+        if self.c['student']['kind']=='local_lora' and resource.getrusage(resource.RUSAGE_SELF).ru_maxrss>self.c['memory_mb']*1024:
+            raise Limit('LoRA worker measured RSS exceeded the configured RAM budget.')
         if elapsed > self.c['minutes']*60: raise Limit('Wall-time budget reached (includes pauses).')
         status=self.store.get(self.rid)['status']
         if status == 'stopped': raise Halt('Stopped by user.')
@@ -234,6 +245,9 @@ class Experiment:
         if self.store.get(self.rid)['status'] in ('ready','interrupted'):
             self.store.update(self.rid,status='running')
         self.guard()
+        if self.c['student']['kind']=='local_lora':
+            from .lora import run
+            return run(self)
         if self.s['phase']=='inspect':
             from .environment import snapshot
             self.store.artifact(self.rid,'environment.json',snapshot())
@@ -400,7 +414,7 @@ def worker(root,rid):
         try:
             c=config_checked(store.get(rid)['config'])
             cap=c['memory_mb']*1024*1024
-            resource.setrlimit(resource.RLIMIT_AS,(cap,cap))
+            if c['student']['kind']!='local_lora':resource.setrlimit(resource.RLIMIT_AS,(cap,cap))
             resource.setrlimit(resource.RLIMIT_CORE,(0,0))
             os.nice(5)
             exp=Experiment(store,rid)
@@ -443,9 +457,17 @@ class Manager:
         if run['status'] not in ('ready','interrupted','paused'):
             raise ValueError('Only ready or interrupted runs can start. Create a new experiment after a terminal result.')
         # Reserve running status in the parent so startup and pause cannot race a ready state.
+        lora=run['config']['student']['kind']=='local_lora'
+        if lora and run['state']['phase']!='inspect':raise ValueError('LoRA optimizer-state resume is not supported yet; preserve this run and create a fresh experiment.')
         env=worker_environment(run['config']['mentor']['kind'])
+        executable=sys.executable
+        if lora:
+            from .lora import python_executable
+            executable=python_executable()
+            env.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_HUB_DISABLE_TELEMETRY='1',TOKENIZERS_PARALLELISM='false',OMP_NUM_THREADS='2',OPENBLAS_NUM_THREADS='2')
+        self.started=time.monotonic()
         self.store.update(rid,status='running')
-        self.process=subprocess.Popen([sys.executable,'-m','overmind','--data',str(self.store.root),'worker',rid],
+        self.process=subprocess.Popen([executable,'-m','overmind','--data',str(self.store.root),'worker',rid],
             cwd=Path(__file__).resolve().parent.parent,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True,env=env)
         self.rid=rid
 
@@ -466,6 +488,17 @@ class Manager:
             self.store.event(self.rid,'system','Emergency stop: laboratory worker terminated. Local inference server is a separate process and may finish its in-flight request.')
 
     def poll(self):
+        if self.process and self.process.poll() is None and self.rid:
+            run=self.store.get(self.rid)
+            if run['config']['student']['kind']=='local_lora':
+                try:
+                    status=Path(f'/proc/{self.process.pid}/status').read_text()
+                    rss=next(int(line.split()[1])//1024 for line in status.splitlines() if line.startswith('VmRSS:'))
+                except (OSError,StopIteration):rss=0
+                if rss>run['config']['memory_mb'] or time.monotonic()-self.started>run['config']['minutes']*60:
+                    self.process.terminate()
+                    self.store.update(self.rid,status='limited')
+                    self.store.event(self.rid,'limit','Parent watchdog terminated LoRA worker after measured RSS or wall-time budget overrun. Last completed adapter checkpoint preserved.')
         if self.process and self.process.poll() is not None:
             run=self.store.get(self.rid)
             if run['status'] in ('running','paused'):

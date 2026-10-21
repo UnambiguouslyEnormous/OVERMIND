@@ -129,6 +129,9 @@ class Store:
         reject_secrets(config)
         reject_secrets(dataset)
         config=redact(config)
+        is_sft=dataset.get('format')=='gafaw.sft.v1'
+        if (config.get('student',{}).get('kind')=='local_lora')!=is_sft:
+            raise ValueError('Local LoRA requires reviewed instruction/response data; classifier/prompt experiments require labeled classification data.')
         original=None
         checkpoint=config.get('student',{}).get('checkpoint')
         if checkpoint:
