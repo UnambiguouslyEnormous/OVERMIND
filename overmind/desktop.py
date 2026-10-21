@@ -17,6 +17,7 @@ from .security import register, redact, clear_credentials, harden_process
 from .ollama import discover
 from .skins import SkinLibrary, PreparedSkin, export_package
 from .widgets import protect_parameters
+from .context_help import install_help_styles, short_help, contextual, help_label, with_help
 
 CLOUD_FORM_DEFAULTS={"budget_usd":"0","input_usd_per_million":"0","output_usd_per_million":"0","max_output_tokens":"2048"}
 
@@ -30,9 +31,10 @@ def label(text,style=None,wrap=False):
 def box(spacing=12,horizontal=False):
     return Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL if horizontal else Gtk.Orientation.VERTICAL,spacing=spacing)
 
-def button(text,callback,style=None):
+def button(text,callback,style=None,tip_key=None):
     w=Gtk.Button(label=text);w.connect('clicked',lambda _:callback())
     if style: w.get_style_context().add_class(style)
+    if tip_key:short_help(w,tip_key)
     return w
 
 def scroll(child):
@@ -45,6 +47,8 @@ class Desktop(Gtk.Window):
     def __init__(self,root,skin_root=None):
         super().__init__(title='GAFAW — The Free, Open-Source AI Laboratory')
         self.set_default_size(1280,900);self.set_size_request(980,700)
+        self.help_provider=install_help_styles(Gdk.Screen.get_default())
+        self.connect('destroy',lambda *_:Gtk.StyleContext.remove_provider_for_screen(Gdk.Screen.get_default(),self.help_provider))
         self.manager=Manager(root);self.store=self.manager.store
         self.selected=None;self.prepared_dataset=None;self.dataset_path=None;self.checkpoint_path=None;self.history_signature=None;self.last_events=None;self.last_hardware=0;self.playground_process=None;self.playground_trial=None
         self.connect('delete-event',self.close)
@@ -59,7 +63,7 @@ class Desktop(Gtk.Window):
         header.set_subtitle(f'The Free, Open-Source AI Laboratory  /  {DISPLAY_VERSION}')
         self.hardware_label=label('Detecting hardware…','subtitle');header.pack_end(self.hardware_label)
         terminal_button=button('Open Terminal Here',self.open_terminal)
-        terminal_button.set_tooltip_text('Open the selected experiment directory · Ctrl+Shift+T')
+        short_help(terminal_button,'terminal')
         header.pack_start(terminal_button)
         accelerators=Gtk.AccelGroup();self.add_accel_group(accelerators)
         key,mods=Gtk.accelerator_parse('<Control><Shift>t')
@@ -109,19 +113,20 @@ class Desktop(Gtk.Window):
 
     def skins_tab(self):
         c=self.page('07   Skin Library')
-        c.pack_start(label('Dress the laboratory. Keep the science.','title'),False,False,0)
+        c.pack_start(help_label('Dress the laboratory. Keep the science.','skins','title'),False,False,0)
         c.pack_start(label('Switch skins live. Local .gafawskin packages contain validated JSON and static SVG/PNG assets. No code, raw CSS, external resources or downloads.','subtitle',True),False,False,0)
         self.skin_choice=Gtk.ComboBoxText();self.skin_choice.connect('changed',lambda *_:self.skin_details())
+        short_help(self.skin_choice,'skin.select')
         c.pack_start(self.skin_choice,False,False,0)
         self.skin_info=label('','subtitle',True);self.skin_info.set_selectable(True);c.pack_start(self.skin_info,False,False,0)
         row=box(8,True)
-        row.pack_start(button('Apply selected skin',self.apply_selected_skin,'primary'),False,False,0)
-        row.pack_start(button('Restore Black Titanium',self.restore_skin),False,False,0)
+        row.pack_start(button('Apply selected skin',self.apply_selected_skin,'primary',tip_key='skin.apply'),False,False,0)
+        row.pack_start(button('Restore Black Titanium',self.restore_skin,tip_key='skin.restore'),False,False,0)
         c.pack_start(row,False,False,0)
         row=box(8,True)
-        row.pack_start(button('Import .gafawskin…',self.import_skin),False,False,0)
-        row.pack_start(button('Export selected skin…',self.export_skin),False,False,0)
-        row.pack_start(button('Refresh library',self.refresh_skins),False,False,0)
+        row.pack_start(button('Import .gafawskin…',self.import_skin,tip_key='skin.import'),False,False,0)
+        row.pack_start(button('Export selected skin…',self.export_skin,tip_key='skin.export'),False,False,0)
+        row.pack_start(button('Refresh library',self.refresh_skins,tip_key='skin.refresh'),False,False,0)
         c.pack_start(row,False,False,0)
         self.skin_status=label('','subtitle',True);self.skin_status.set_selectable(True);c.pack_start(self.skin_status,False,False,0)
         c.pack_start(label('Community authors can export a skin as a starting point, edit manifest.json, give it a new id and repackage it. Font files and arbitrary widget/layout overrides are intentionally unsupported. Contrast remains the author’s responsibility; the engine preserves focus rings and native controls.','subtitle',True),False,False,0)
@@ -184,24 +189,24 @@ class Desktop(Gtk.Window):
         self.tabs.append_page(scroll(content),label(title))
         return content
 
-    def card(self,title,subtitle=None):
+    def card(self,title,subtitle=None,help_key=None):
         w=box(12);w.get_style_context().add_class('card')
-        w.pack_start(label(title,'eyebrow'),False,False,0)
+        w.pack_start(help_label(title,help_key,'eyebrow') if help_key else label(title,'eyebrow'),False,False,0)
         if subtitle:w.pack_start(label(subtitle,'subtitle',True),False,False,0)
         return w
 
     def setup_tab(self):
         c=self.setup_content=self.page('01   Configure')
-        c.pack_start(label('A laboratory for learning.','title'),False,False,0)
+        c.pack_start(help_label('A laboratory for learning.','configure','title'),False,False,0)
         reset=button('Reset to Defaults',self.reset_configuration)
-        reset.set_tooltip_text('Reset the next experiment: roles/models, objective, dataset, checkpoint, limits, budgets and sharing permissions. Credentials, skins and saved experiments stay intact.')
-        c.pack_start(reset,False,False,0)
+        short_help(reset,'reset')
+        c.pack_start(with_help(reset,'reset'),False,False,0)
         c.pack_start(label('Factory defaults: CPU classifier + curriculum controller · built-in dataset · 18 epochs · 15 minutes · 240 calls · 512 MB · 3 candidates. Reset affects only the next experiment.','subtitle',True),False,False,0)
         c.pack_start(label('Connect a teacher, choose a student, and measure what actually changes.','subtitle',True),False,False,0)
         roles=box(16,True);c.pack_start(roles,False,False,0)
         self.role_widgets={}
         for role in ('mentor','student'):
-            card=self.card(role.upper(),'Directs experiments' if role=='mentor' else 'The model being improved')
+            card=self.card(role.upper(),'Directs experiments' if role=='mentor' else 'The model being improved',help_key=role)
             roles.pack_start(card,True,True,0)
             combo=Gtk.ComboBoxText()
             combo.append('controller' if role=='mentor' else 'linear','Curriculum controller · deterministic' if role=='mentor' else 'CPU text classifier · real weight training')
@@ -209,17 +214,18 @@ class Desktop(Gtk.Window):
                 combo.append('openai','OpenAI · cloud mentor');combo.append('anthropic','Anthropic · cloud mentor')
             if role=='student':combo.append('local_lora','Local HF Qwen · real SFT + LoRA')
             combo.append('ollama','Ollama · local LLM');combo.append('compatible','Compatible API · local LLM');combo.set_active(0)
-            card.pack_start(combo,False,False,0)
+            contextual(combo,role);card.pack_start(combo,False,False,0)
             url=entry('http://127.0.0.1:11434');model=Gtk.ComboBoxText.new_with_entry();model.get_child().set_placeholder_text('Discover models or enter an exact ID')
+            short_help(url,'endpoint');short_help(model,'model.identity')
             card.pack_start(url,False,False,0);card.pack_start(model,False,False,0)
             if role=='mentor':
                 self.api_key=entry();self.api_key.set_visibility(False);self.api_key.set_placeholder_text('Session API key; blank uses provider environment variable')
-                self.api_key.set_input_purpose(Gtk.InputPurpose.PASSWORD)
+                self.api_key.set_input_purpose(Gtk.InputPurpose.PASSWORD);short_help(self.api_key,'credentials.input')
                 self.api_key.set_no_show_all(True);card.pack_start(self.api_key,False,False,0)
-                card.pack_start(button('Clear session keys',self.clear_session_keys),False,False,0)
-            card.pack_start(button('Discover models',lambda r=role:self.discover_models(r)),False,False,0)
-            if role=='student':card.pack_start(button('Test local inference',self.test_student),False,False,0)
-            check=button('Inspect connection',lambda r=role:self.check_connection(r));card.pack_start(check,False,False,0)
+                card.pack_start(with_help(button('Clear session keys',self.clear_session_keys),'credentials'),False,False,0)
+            card.pack_start(button('Discover models',lambda r=role:self.discover_models(r),tip_key='discover'),False,False,0)
+            if role=='student':card.pack_start(button('Test local inference',self.test_student,tip_key='inference.test'),False,False,0)
+            check=button('Inspect connection',lambda r=role:self.check_connection(r),tip_key='inspect');card.pack_start(check,False,False,0)
             info=label('Built-in; no external server required.','subtitle',True);card.pack_start(info,False,False,0)
             self.role_widgets[role]=(combo,url,model,info,check)
             def changed(w,r=role):
@@ -247,64 +253,64 @@ class Desktop(Gtk.Window):
             combo.connect('changed',changed);changed(combo)
         self.build_lora_controls(c)
         checkpoint_row=box(8,True)
-        checkpoint_row.pack_start(button('Use saved student weights…',self.choose_checkpoint),False,False,0)
-        checkpoint_row.pack_start(button('Use a fresh student',self.reset_checkpoint),False,False,0)
+        checkpoint_row.pack_start(with_help(button('Use saved student weights…',self.choose_checkpoint),'checkpoint'),False,False,0)
+        checkpoint_row.pack_start(button('Use a fresh student',self.reset_checkpoint,tip_key='checkpoint.fresh'),False,False,0)
         self.checkpoint_label=label('Fresh CPU classifier · no pretrained knowledge','subtitle',True)
         checkpoint_row.pack_start(self.checkpoint_label,True,True,0);c.pack_start(checkpoint_row,False,False,0)
-        goal=self.card('LEARNING OBJECTIVE','For this slice, capabilities are measured as exact-label text classification. For other domains, supply your own licensed labeled dataset.')
+        goal=self.card('LEARNING OBJECTIVE','Use compatible licensed classification or instruction data. The chosen backend determines what the experiment measures.',help_key='objective')
         self.objective=entry(DEFAULTS['objective']);goal.pack_start(self.objective,False,False,0)
         self.dataset_label=label('Support routing v1 · CC0 · 80 training / 24 validation / 40 held-out examples','subtitle',True)
-        goal.pack_start(self.dataset_label,False,False,0)
-        row=box(8,True);row.pack_start(button('Choose dataset JSON…',self.choose_dataset),False,False,0)
-        row.pack_start(button('Use built-in benchmark',self.reset_dataset),False,False,0);goal.pack_start(row,False,False,0)
+        goal.pack_start(with_help(self.dataset_label,'dataset'),False,False,0)
+        row=box(8,True);row.pack_start(button('Choose dataset JSON…',self.choose_dataset,tip_key='dataset.choose'),False,False,0)
+        row.pack_start(button('Use built-in benchmark',self.reset_dataset,tip_key='dataset.builtin'),False,False,0);goal.pack_start(row,False,False,0)
         c.pack_start(goal,False,False,0)
         limits=self.card('RESOURCE ENVELOPE','The laboratory worker is memory- and time-bounded. Limits do not control memory used by a separately running inference server.')
         grid=Gtk.Grid(column_spacing=18,row_spacing=8);limits.pack_start(grid,False,False,0);self.spins={}
         for col,(key,title,low,high) in enumerate([('epochs','Training epochs',1,60),('minutes','Wall minutes',1,120),('max_calls','LLM call limit',1,2000),('memory_mb','Worker RAM · MB',128,16384)]):
             spin=Gtk.SpinButton.new_with_range(low,high,1);spin.set_value(DEFAULTS[key]);spin.set_hexpand(True)
-            grid.attach(label(title,'subtitle'),col,0,1,1);grid.attach(spin,col,1,1,1);self.spins[key]=spin
+            grid.attach(help_label(title,'experiment.'+key,'subtitle',control=spin),col,0,1,1);grid.attach(spin,col,1,1,1);self.spins[key]=spin
         limits.pack_start(label('LLM mode: bounded mentor candidates choose prompt or retrieval improvements. Student inference remains local.','subtitle',True),False,False,0)
         c.pack_start(limits,False,False,0)
-        attempts_row=box(10,True);attempts_row.pack_start(label('Maximum mentor candidates','subtitle'),False,False,0)
-        self.attempts=Gtk.SpinButton.new_with_range(1,8,1);self.attempts.set_value(3);attempts_row.pack_start(self.attempts,False,False,0);limits.pack_start(attempts_row,False,False,0)
-        cloud_card=self.card('CLOUD MENTOR SPENDING','Enter upper-bound rates from your provider’s current pricing for the exact model. Zero defaults block paid usage. Uncertain requests retain their full reservation.')
+        attempts_row=box(10,True)
+        self.attempts=Gtk.SpinButton.new_with_range(1,8,1);self.attempts.set_value(3);attempts_row.pack_start(help_label('Maximum mentor candidates','experiment.attempts','subtitle',control=self.attempts),False,False,0);attempts_row.pack_start(self.attempts,False,False,0);limits.pack_start(attempts_row,False,False,0)
+        cloud_card=self.card('CLOUD MENTOR SPENDING','Enter upper-bound rates from your provider’s current pricing for the exact model. Zero defaults block paid usage. Uncertain requests retain their full reservation.',help_key='cloud')
         cloud_grid=Gtk.Grid(column_spacing=12,row_spacing=8);self.cloud_fields={}
         for col,(key,title,default) in enumerate([('budget_usd','Run budget · USD','0'),('input_usd_per_million','Input · USD / 1M','0'),('output_usd_per_million','Output · USD / 1M','0'),('max_output_tokens','Output token cap','2048')]):
             w=entry(default);w.set_width_chars(10);w.set_hexpand(True);self.cloud_fields[key]=w
-            cloud_grid.attach(label(title,'subtitle'),col,0,1,1);cloud_grid.attach(w,col,1,1,1)
+            cloud_grid.attach(help_label(title,'cloud.'+key,'subtitle',control=w),col,0,1,1);cloud_grid.attach(w,col,1,1,1)
         cloud_card.pack_start(cloud_grid,False,False,0)
         self.cloud_authorized=Gtk.CheckButton(label='Authorize paid mentor calls for this run within the configured budget.')
         self.cloud_sharing=Gtk.CheckButton(label='Allow this objective, hardware/model details, and training/validation data to be sent to the cloud mentor.')
         cloud_card.pack_start(self.cloud_authorized,False,False,0);cloud_card.pack_start(self.cloud_sharing,False,False,0);c.pack_start(cloud_card,False,False,0)
         self.consent=Gtk.CheckButton(label='Allow the selected dataset’s training and validation text to be sent to my local model server.')
-        self.consent.set_active(False);c.pack_start(self.consent,False,False,0)
-        row=box(12,True);self.run_button=button('RUN EXPERIMENT  →',self.run_new,'primary');row.pack_start(self.run_button,False,False,0)
+        self.consent.set_active(False);c.pack_start(with_help(self.consent,'consent'),False,False,0)
+        row=box(12,True);self.run_button=button('RUN EXPERIMENT  →',self.run_new,'primary',tip_key='run');row.pack_start(self.run_button,False,False,0)
         row.pack_start(label('Original models stay intact. Every candidate gets an evidence report.','subtitle',True),True,True,0);c.pack_start(row,False,False,0)
 
     def build_lora_controls(self,parent):
         from .lora import OPTIONS
-        card=self.lora_card=self.card('LOCAL GENERATIVE SFT + LORA','Optional isolated PyTorch / Transformers / PEFT worker. No downloads or model code execution. Start with short reviewed examples and a small compatible Qwen checkpoint.')
+        card=self.lora_card=self.card('LOCAL GENERATIVE SFT + LORA','Optional isolated PyTorch / Transformers / PEFT worker. No downloads or model code execution. Start with short reviewed examples and a small compatible Qwen checkpoint.',help_key='lora')
         card.set_no_show_all(True);card.set_visible(False);parent.pack_start(card,False,False,0)
         row=box(8,True);self.lora_device=Gtk.ComboBoxText()
         for value in ('cpu','cuda'):self.lora_device.append(value,value.upper())
-        self.lora_device.set_active_id('cpu');row.pack_start(label('Device','subtitle'),False,False,0);row.pack_start(self.lora_device,False,False,0)
+        self.lora_device.set_active_id('cpu');row.pack_start(help_label('Device','lora.device','subtitle',control=self.lora_device),False,False,0);row.pack_start(self.lora_device,False,False,0)
         self.lora_precision=Gtk.ComboBoxText()
         for value in ('fp32','fp16'):self.lora_precision.append(value,value.upper())
         self.lora_precision.set_active_id('fp32');self.lora_precision.set_sensitive(False)
         self.lora_device.connect('changed',lambda *_:self.change_lora_device())
-        row.pack_start(label('Precision','subtitle'),False,False,0);row.pack_start(self.lora_precision,False,False,0);card.pack_start(row,False,False,0)
-        self.lora_license=entry();self.lora_license.set_placeholder_text('Base model license / permission reviewed by you (required)');card.pack_start(self.lora_license,False,False,0)
+        row.pack_start(help_label('Precision','lora.precision','subtitle',control=self.lora_precision),False,False,0);row.pack_start(self.lora_precision,False,False,0);card.pack_start(row,False,False,0)
+        self.lora_license=entry();self.lora_license.set_placeholder_text('Base model license / permission reviewed by you (required)');card.pack_start(with_help(self.lora_license,'model.license'),False,False,0)
         grid=Gtk.Grid(column_spacing=12,row_spacing=8);self.lora_spins={}
         for i,(key,title,low,high) in enumerate((('max_length','Context cap',32,2048),('max_steps','Optimizer step cap',1,1000),('rank','LoRA rank',1,64),('alpha','LoRA alpha',1,128),('accumulation','Accumulation',1,32),('max_new_tokens','Generation cap',1,256))):
             spin=Gtk.SpinButton.new_with_range(low,high,1);spin.set_value(OPTIONS[key]);self.lora_spins[key]=spin
-            grid.attach(label(title,'subtitle'),i%3,(i//3)*2,1,1);grid.attach(spin,i%3,(i//3)*2+1,1,1)
+            grid.attach(help_label(title,'lora.'+key,'subtitle',control=spin),i%3,(i//3)*2,1,1);grid.attach(spin,i%3,(i//3)*2+1,1,1)
         card.pack_start(grid,False,False,0)
-        self.lora_rate=entry(str(OPTIONS['learning_rate']));card.pack_start(label('Learning rate','subtitle'),False,False,0);card.pack_start(self.lora_rate,False,False,0)
+        self.lora_rate=entry(str(OPTIONS['learning_rate']));card.pack_start(help_label('Learning rate','lora.learning_rate','subtitle',control=self.lora_rate),False,False,0);card.pack_start(self.lora_rate,False,False,0)
         self.style_prompt=entry('');self.style_prompt.set_placeholder_text('Personality Forge: desired style/system prompt (optional, ≤2,000 characters)')
-        parent.pack_start(label('Personality Forge · optional style/system prompt (prompt-only baseline or LoRA)','subtitle',True),False,False,0)
+        parent.pack_start(help_label('Personality Forge · optional style/system prompt (prompt-only baseline or LoRA)','personality','subtitle',control=self.style_prompt,wrap=True),False,False,0)
         parent.pack_start(self.style_prompt,False,False,0)
-        card.pack_start(button('Use editable collaborator example seed',self.edit_instructions),False,False,0)
-        card.pack_start(button('Check actual training compatibility',self.lora_preflight),False,False,0)
+        card.pack_start(button('Use editable collaborator example seed',self.edit_instructions,tip_key='workshop.instructions'),False,False,0)
+        card.pack_start(button('Check actual training compatibility',self.lora_preflight,tip_key='inspect'),False,False,0)
         self.lora_status=label('CPU FP32 default. CUDA/FP16 require runtime verification. No BF16, FlashAttention, QLoRA, auto offloading or optimizer-state resume in this initial backend.','subtitle',True)
         card.pack_start(self.lora_status,False,False,0)
         card.set_no_show_all(False);card.show_all();card.hide();card.set_no_show_all(True)
@@ -344,7 +350,7 @@ class Desktop(Gtk.Window):
 
     def live_tab(self):
         c=self.live_content=self.page('02   Laboratory')
-        self.run_title=label('No experiment selected','title');c.pack_start(self.run_title,False,False,0)
+        self.run_title=label('No experiment selected','title');c.pack_start(with_help(self.run_title,'laboratory'),False,False,0)
         self.run_detail=label('Start an experiment to follow its decisions and measurements.','subtitle',True);c.pack_start(self.run_detail,False,False,0)
         row=box(14,True);self.metrics={}
         for key,title in [('status','STATE'),('baseline','BASELINE'),('candidate','CANDIDATE')]:
@@ -352,9 +358,9 @@ class Desktop(Gtk.Window):
         c.pack_start(row,False,False,0)
         self.progress=Gtk.ProgressBar();self.progress.set_show_text(True);c.pack_start(self.progress,False,False,0)
         controls=box(10,True)
-        self.pause_button=button('Pause',self.pause);controls.pack_start(self.pause_button,False,False,0)
-        self.resume_button=button('Resume / Recover',self.resume);controls.pack_start(self.resume_button,False,False,0)
-        self.stop_button=button('Emergency stop',self.stop,'danger');controls.pack_start(self.stop_button,False,False,0)
+        self.pause_button=button('Pause',self.pause,tip_key='pause');controls.pack_start(self.pause_button,False,False,0)
+        self.resume_button=button('Resume / Recover',self.resume,tip_key='resume');controls.pack_start(self.resume_button,False,False,0)
+        self.stop_button=button('Emergency stop',self.stop,'danger',tip_key='stop');controls.pack_start(self.stop_button,False,False,0)
         c.pack_start(controls,False,False,0)
         self.loss_image=Gtk.Image();self.loss_image.set_halign(Gtk.Align.START);c.pack_start(self.loss_image,False,False,0)
         c.pack_start(label('DECISIONS & MEASUREMENTS','eyebrow'),False,False,0)
@@ -363,26 +369,26 @@ class Desktop(Gtk.Window):
 
     def evidence_tab(self):
         c=self.page('03   Evidence & artifacts')
-        c.pack_start(label('Proof before promotion.','title'),False,False,0)
+        c.pack_start(help_label('Proof before promotion.','evidence','title'),False,False,0)
         self.verification=label('No completed comparison yet. Improvement is never assumed.','subtitle',True);c.pack_start(self.verification,False,False,0)
         self.artifact_label=label('Candidates, dataset snapshots, raw predictions and reports are saved locally.','subtitle',True);c.pack_start(self.artifact_label,False,False,0)
-        c.pack_start(button('Export private evidence bundle…',self.export_evidence_bundle),False,False,0)
+        c.pack_start(with_help(button('Export private evidence bundle…',self.export_evidence_bundle),'bundle'),False,False,0)
         self.artifact_choice=Gtk.ComboBoxText()
         for name in ('report.json','training-integrity.json','training-metrics.json','candidate-validation.json','candidate.json','baseline-validation.json','latest-validation.json','baseline-test.json','candidate-test.json','promoted.json','billing.json','preflight.json','base-model.json','checkpoint.json','stock-test.json','environment.json'):
             self.artifact_choice.append_text(name)
         self.artifact_choice.set_active(0);self.artifact_choice.connect('changed',lambda _:self.show_artifact())
-        c.pack_start(self.artifact_choice,False,False,0)
+        c.pack_start(short_help(self.artifact_choice,'artifact'),False,False,0)
         self.artifact_text=Gtk.TextView();self.artifact_text.set_editable(False);self.artifact_text.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         sc=scroll(self.artifact_text);sc.set_size_request(-1,260);c.pack_start(sc,True,True,0)
         trial=self.card('TRY THE FROZEN STUDENT','Loads the selected artifact. This input is not added to training data or the benchmark.')
         self.try_input=entry('I need a refund for a duplicate charge');trial.pack_start(self.try_input,False,False,0)
-        trial.pack_start(button('Classify with candidate',self.try_candidate),False,False,0)
+        trial.pack_start(button('Classify with candidate',self.try_candidate,tip_key='candidate.try'),False,False,0)
         self.try_result=label('—','subtitle',True);trial.pack_start(self.try_result,False,False,0);c.pack_start(trial,False,False,0)
         self.playground_controls(c)
 
     def playground_controls(self,parent):
-        card=self.card('PERSONALITY PLAYGROUND','Manual matched-prompt comparison. Stock, prompted and trained responses are distinct. Human ratings are independent axes, not automatic claims of factual improvement.')
-        self.playground_prompt=entry('How should we investigate a stubborn software bug?');card.pack_start(self.playground_prompt,False,False,0)
+        card=self.card('PERSONALITY PLAYGROUND',help_key='playground',subtitle='Manual matched-prompt comparison. Stock, prompted and trained responses are distinct. Human ratings are independent axes, not automatic claims of factual improvement.')
+        self.playground_prompt=short_help(entry('How should we investigate a stubborn software bug?'),'playground.prompt');card.pack_start(self.playground_prompt,False,False,0)
         row=box(8,True)
         row.pack_start(button('Compare selected LoRA checkpoint',self.run_playground),False,False,0)
         row.pack_start(button('Prompt-only baseline on configured local endpoint',self.run_prompt_playground),False,False,0)
@@ -397,12 +403,14 @@ class Desktop(Gtk.Window):
         card.pack_start(responses,True,True,0)
         self.playground_output=Gtk.TextView();self.playground_output.set_editable(False);self.playground_output.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         sc=scroll(self.playground_output);sc.set_size_request(-1,100);card.pack_start(sc,False,False,0)
+        card.pack_start(help_label('Human ratings','feedback','subtitle'),False,False,0)
         self.feedback_axes={};grid=Gtk.Grid(column_spacing=12,row_spacing=8)
         for col,axis in enumerate(('style','instruction','technical','consistency')):
-            spin=Gtk.SpinButton.new_with_range(0,5,1);grid.attach(label(axis+' · 0=unrated','subtitle'),col,0,1,1);grid.attach(spin,col,1,1,1);self.feedback_axes[axis]=spin
+            spin=short_help(Gtk.SpinButton.new_with_range(0,5,1),'feedback.'+axis);grid.attach(label(axis+' · 0=unrated','subtitle'),col,0,1,1);grid.attach(spin,col,1,1,1);self.feedback_axes[axis]=spin
         card.pack_start(grid,False,False,0)
         self.feedback_notes=entry();self.feedback_notes.set_placeholder_text('Human feedback about the adapter/prompted response; notes about factual errors and regressions')
-        card.pack_start(self.feedback_notes,False,False,0);card.pack_start(button('Save human feedback to selected experiment',self.save_playground_feedback),False,False,0)
+        short_help(self.feedback_notes,'feedback.notes')
+        card.pack_start(self.feedback_notes,False,False,0);card.pack_start(button('Save human feedback to selected experiment',self.save_playground_feedback,tip_key='feedback.save'),False,False,0)
         parent.pack_start(card,False,False,0)
 
     def render_playground(self,result,error=None):
@@ -494,25 +502,26 @@ class Desktop(Gtk.Window):
 
     def workshop_tab(self):
         c=self.page('04   Dataset Workshop')
-        c.pack_start(label('Good science starts with clean data.','title'),False,False,0)
+        c.pack_start(help_label('Good science starts with clean data.','workshop','title'),False,False,0)
         c.pack_start(label('Import labeled JSONL, CSV, TSV or tab-separated TXT (input,target columns; optional split). JSON retains authored splits. Review the editable JSONL before use.','subtitle',True),False,False,0)
         row=box(8,True)
         self.workshop_license=entry('');self.workshop_license.set_placeholder_text('License / permission statement (required for new imports)')
-        row.pack_start(self.workshop_license,True,True,0)
+        row.pack_start(with_help(self.workshop_license,'dataset.license'),True,True,0)
         self.split_seed=Gtk.SpinButton.new_with_range(0,4294967295,1);self.split_seed.set_value(42)
-        row.pack_start(label('Split seed','subtitle'),False,False,0);row.pack_start(self.split_seed,False,False,0)
+        row.pack_start(help_label('Split seed','dataset.seed','subtitle',control=self.split_seed),False,False,0);row.pack_start(self.split_seed,False,False,0)
         c.pack_start(row,False,False,0)
         actions=box(8,True)
-        actions.pack_start(button('Import labeled file…',self.import_dataset),False,False,0)
-        actions.pack_start(button('Load benchmark into editor',self.edit_benchmark),False,False,0)
-        actions.pack_start(button('Load instruction seed',self.edit_instructions),False,False,0)
+        actions.pack_start(button('Import labeled file…',self.import_dataset,tip_key='workshop.import'),False,False,0)
+        actions.pack_start(button('Load benchmark into editor',self.edit_benchmark,tip_key='workshop.benchmark'),False,False,0)
+        actions.pack_start(button('Load instruction seed',self.edit_instructions,tip_key='workshop.instructions'),False,False,0)
         c.pack_start(actions,False,False,0)
         self.dataset_editor=Gtk.TextView();self.dataset_editor.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         self.dataset_editor.set_monospace(True)
+        short_help(self.dataset_editor,'workshop.editor')
         sc=scroll(self.dataset_editor);sc.set_size_request(-1,280);c.pack_start(sc,True,True,0)
         actions=box(8,True)
-        actions.pack_start(button('Validate & use reviewed data',self.use_workshop,'primary'),False,False,0)
-        actions.pack_start(button('Export new dataset version…',self.export_dataset),False,False,0)
+        actions.pack_start(button('Validate & use reviewed data',self.use_workshop,'primary',tip_key='workshop.use'),False,False,0)
+        actions.pack_start(with_help(button('Export new dataset version…',self.export_dataset),'dataset.version'),False,False,0)
         c.pack_start(actions,False,False,0)
         self.workshop_result=label('No file imported. Unassigned rows are deduplicated, then stratified 70/15/15. Every split must contain ≥8 rows and every label. Exact overlap is blocked; review paraphrases manually.','subtitle',True)
         self.workshop_result.set_selectable(True);c.pack_start(self.workshop_result,False,False,0)
@@ -581,12 +590,12 @@ class Desktop(Gtk.Window):
 
     def system_tab(self):
         c=self.page('05   Hardware & Models')
-        c.pack_start(label('Hardware reality checker.','title'),False,False,0)
+        c.pack_start(help_label('Hardware reality checker.','hardware','title'),False,False,0)
         c.pack_start(label('Live diagnostics; inference access and trainable checkpoints are separate capabilities. No model downloads or code execution.','subtitle',True),False,False,0)
-        c.pack_start(button('Refresh hardware diagnostics',self.refresh_hardware),False,False,0)
+        c.pack_start(button('Refresh hardware diagnostics',self.refresh_hardware,tip_key='hardware.refresh'),False,False,0)
         self.hardware_details=Gtk.TextView();self.hardware_details.set_editable(False);self.hardware_details.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         sc=scroll(self.hardware_details);sc.set_size_request(-1,260);c.pack_start(sc,True,True,0)
-        c.pack_start(button('Inspect local HF checkpoint directory…',self.inspect_local_model),False,False,0)
+        c.pack_start(with_help(button('Inspect local HF checkpoint directory…',self.inspect_local_model),'model.metadata'),False,False,0)
         self.local_model_info=label('Select an existing HF-compatible directory to inspect architecture, tokenizer presence, safe weight files, storage, adapter metadata and license evidence. Use Configure for Ollama/API model discovery.','subtitle',True)
         self.local_model_info.set_selectable(True);c.pack_start(self.local_model_info,False,False,0)
 
@@ -608,15 +617,18 @@ class Desktop(Gtk.Window):
 
     def notebook_tab(self):
         c=self.page('06   Notebook & Compare')
-        c.pack_start(label('Keep the evidence. Question the result.','title'),False,False,0)
+        c.pack_start(help_label('Keep the evidence. Question the result.','notebook','title'),False,False,0)
         c.pack_start(label('Markdown notes belong to the selected experiment. Comparisons read saved predictions; they make no new model calls. Repeated holdout use is exploratory.','subtitle',True),False,False,0)
         self.note_editor=Gtk.TextView();self.note_editor.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        short_help(self.note_editor,'notes.editor')
         sc=scroll(self.note_editor);sc.set_size_request(-1,140);c.pack_start(sc,False,False,0)
-        c.pack_start(button('Save experiment notes',self.save_notes),False,False,0)
+        c.pack_start(button('Save experiment notes',self.save_notes,tip_key='notes.save'),False,False,0)
         row=box(8,True);self.compare_left=Gtk.ComboBoxText();self.compare_right=Gtk.ComboBoxText()
+        short_help(self.compare_left,'compare.left')
+        short_help(self.compare_right,'compare.right')
         row.pack_start(self.compare_left,True,True,0);row.pack_start(self.compare_right,True,True,0)
-        row.pack_start(button('Compare recorded results',self.compare_runs),False,False,0);c.pack_start(row,False,False,0)
-        c.pack_start(button('Inspect selected experiment failures',self.inspect_failures),False,False,0)
+        row.pack_start(with_help(button('Compare recorded results',self.compare_runs),'comparison'),False,False,0);c.pack_start(row,False,False,0)
+        c.pack_start(button('Inspect selected experiment failures',self.inspect_failures,tip_key='failures'),False,False,0)
         self.science_result=Gtk.TextView();self.science_result.set_editable(False);self.science_result.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         sc=scroll(self.science_result);sc.set_size_request(-1,240);c.pack_start(sc,True,True,0)
         self.science_result.get_buffer().set_text('Select a completed experiment to inspect failures, or choose two completed runs to compare recorded accuracy and Wilson intervals. No measurements are available before a run completes.')

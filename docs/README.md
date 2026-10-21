@@ -20,3 +20,5 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md), the [MIT code license](../LICENSE), a
 - [Skin Library and community skin manifest/package format](skins.md)
 
 - [Phase Two: Configure UX, local Qwen LoRA and Personality Playground](local-lora.md)
+
+- [Contextual help and UI contribution standard](context-help.md)

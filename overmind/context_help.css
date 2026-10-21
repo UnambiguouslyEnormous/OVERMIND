@@ -1,0 +1,10 @@
+/* Namespaced, stable reading surface: imported skins cannot obscure contextual explanations. */
+button.gafaw-help-trigger { background-image: none; background-color: #20272b; color: #d3dedb; border: 1px solid transparent; border-radius: 12px; min-width: 22px; min-height: 22px; padding: 2px; font-size: 13px; font-weight: bold; box-shadow: none; text-shadow: none; }
+button.gafaw-help-trigger:hover { background-color: #334039; border-color: #70877a; }
+button.gafaw-help-trigger:focus { outline: 2px solid #c3e5ff; outline-offset: 1px; }
+popover.gafaw-help { background-image: none; background-color: #20272b; color: #eff4f2; border: 1px solid #788b86; }
+popover.gafaw-help label { color: #eff4f2; font-family: "DejaVu Sans", sans-serif; font-size: 14px; text-shadow: none; }
+popover.gafaw-help .help-heading { font-size: 16px; font-weight: bold; }
+popover.gafaw-help button { background-image: none; background-color: #33463d; color: #eff4f2; border: 1px solid #788b86; border-radius: 3px; padding: 7px 12px; text-shadow: none; }
+popover.gafaw-help button:hover { background-color: #486153; }
+popover.gafaw-help button:focus { outline: 2px solid #c3e5ff; outline-offset: 2px; }

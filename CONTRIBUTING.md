@@ -16,3 +16,5 @@ python3 -B -m overmind.secret_scan --staged
 ```
 
 See [setup](README.md#run) and [scanner limitations](docs/security.md). Review the actual diff as well: pattern scanning cannot detect every secret or personal detail. Include the test result in the PR and identify any live integration or desktop checks that were not performed. Contributions are offered under the project's MIT license; the benchmark's CC0 and external dependency/model/data licenses remain separate.
+
+All new or changed interface controls must follow the [contextual-help standard](docs/context-help.md): intentional short tooltips or accessible question-mark popovers, centralized definitions, and focused validation. See [AGENTS.md](AGENTS.md) for the shared developer and AI-agent requirements.
