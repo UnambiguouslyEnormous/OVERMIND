@@ -18,12 +18,12 @@ def main():
         except KeyboardInterrupt:
             return 130
         except Exception as error:
-            print('OVERMIND:',redact(str(error)),file=sys.stderr)
+            print('GAFAW:',redact(str(error)),file=sys.stderr)
             return 1
 
 
 def _main():
-    parser=argparse.ArgumentParser(description='OVERMIND — bounded, verifiable local AI experiments')
+    parser=argparse.ArgumentParser(description='GAFAW — bounded, verifiable local AI experiments')
     parser.add_argument('--data',default=str(Path(__file__).resolve().parent.parent/'lab-data'),help='Persistent laboratory directory')
     commands=parser.add_subparsers(dest='command')
     commands.add_parser('desktop',help='Launch the native desktop (default)')
@@ -83,6 +83,6 @@ def _main():
             print('Artifacts:',store.root/rid)
             return result
     except (ValueError,OSError,KeyError,RuntimeError,ImportError,json.JSONDecodeError) as e:
-        print('OVERMIND:',str(e),file=sys.stderr);return 1
+        print('GAFAW:',str(e),file=sys.stderr);return 1
 
 if __name__=='__main__':sys.exit(main())

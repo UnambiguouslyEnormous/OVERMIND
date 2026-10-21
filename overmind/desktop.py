@@ -16,36 +16,6 @@ from .providers import provider, inspection_summary
 from .security import register, redact, clear_credentials, harden_process
 from .ollama import discover
 
-CSS = b'''
-* { font-family: "Inter", "DejaVu Sans", sans-serif; font-size: 13px; }
-window { background: #11151e; color: #e5eaf4; }
-headerbar { background: #171c28; border: 0; padding: 12px; }
-headerbar .title { color: #f4f6fc; font-weight: bold; }
-.sidebar { background: #151a25; border-right: 1px solid #2a3243; padding: 20px; }
-.title { font-size: 28px; font-weight: bold; color: #f4f7fd; }
-.subtitle { color: #9caac0; font-size: 13px; }
-.brand { font-size: 21px; letter-spacing: 3px; font-weight: bold; color: #b8c5ff; }
-.eyebrow { font-size: 11px; font-weight: bold; color: #9aacc8; letter-spacing: 1px; }
-.card { background: #1b2230; border: 1px solid #303b50; border-radius: 12px; padding: 20px; }
-.metric { font-size: 30px; font-weight: bold; color: #c4d0ff; }
-button { background: #273247; border: 1px solid #3a4861; color: #eaf0ff; border-radius: 7px; padding: 9px 14px; }
-button:hover { background: #354766; }
-button:disabled { opacity: 0.4; }
-button.primary { background: #a8bbff; border-color: #a8bbff; color: #10182b; font-weight: bold; }
-button.danger { background: #512c39; border-color: #855064; color: #ffccda; }
-entry, spinbutton, combobox button, textview text { background: #121925; color: #e4ebf8; border-color: #39455c; }
-entry, spinbutton { border-radius: 6px; padding: 8px; }
-textview { background: #121925; padding: 14px; }
-textview text { font-family: "DejaVu Sans Mono", monospace; font-size: 12px; }
-notebook header { background: #151b27; border-bottom: 1px solid #303b50; }
-notebook tab { padding: 12px 18px; }
-notebook tab:checked { color: #b8c8ff; border-bottom: 2px solid #b8c8ff; }
-list, list row { background: transparent; color: #dce4f2; }
-list row:selected { background: #2a3650; border-radius: 7px; }
-progressbar trough { background: #293449; border: 0; border-radius: 4px; min-height: 6px; }
-progressbar progress { background: #9bb3ff; border: 0; border-radius: 4px; }
-separator { background: #303b50; }
-'''
 
 def label(text,style=None,wrap=False):
     w=Gtk.Label(label=text,xalign=0)
@@ -69,21 +39,27 @@ def entry(text=''):
 
 class Desktop(Gtk.Window):
     def __init__(self,root):
-        super().__init__(title='OVERMIND — AI Apprenticeship Laboratory')
+        super().__init__(title='GAFAW — The Free, Open-Source AI Laboratory')
         self.set_default_size(1280,900);self.set_size_request(980,700)
         self.manager=Manager(root);self.store=self.manager.store
         self.selected=None;self.dataset_path=None;self.checkpoint_path=None;self.history_signature=None;self.last_events=None;self.last_hardware=0
         self.connect('delete-event',self.close)
-        css=Gtk.CssProvider();css.load_from_data(CSS)
+        css=Gtk.CssProvider();css.load_from_path(str(Path(__file__).with_name('titanium.css')))
         Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(),css,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-        header=Gtk.HeaderBar();header.set_show_close_button(True);header.set_title('OVERMIND')
-        header.set_subtitle(f'AI APPRENTICESHIP LABORATORY  /  {DISPLAY_VERSION}')
+        header=Gtk.HeaderBar();header.set_show_close_button(True);header.set_title('GAFAW')
+        header.set_subtitle(f'The Free, Open-Source AI Laboratory  /  {DISPLAY_VERSION}')
         self.hardware_label=label('Detecting hardware…','subtitle');header.pack_end(self.hardware_label)
+        header.pack_start(button('Open Terminal Here',self.open_terminal))
+        accelerators=Gtk.AccelGroup();self.add_accel_group(accelerators)
+        key,mods=Gtk.accelerator_parse('<Control><Shift>t')
+        accelerators.connect(key,mods,Gtk.AccelFlags.VISIBLE,lambda *_:self.open_terminal() or True)
         self.set_titlebar(header)
+        self.set_icon_from_file(str(Path(__file__).with_name('assets')/'gafaw-mark.svg'))
         layout=box(0,True);self.add(layout)
         side=box(18);side.set_size_request(248,-1);side.get_style_context().add_class('sidebar');layout.pack_start(side,False,False,0)
-        side.pack_start(label('OVERMIND','brand'),False,False,0)
-        side.pack_start(label('Teach. Test. Verify.','subtitle'),False,False,0)
+        side.pack_start(Gtk.Image.new_from_file(str(Path(__file__).with_name('assets')/'gafaw-mark.svg')),False,False,0)
+        side.pack_start(label('GAFAW','brand'),False,False,0)
+        side.pack_start(label('Teach. Test. Verify. Evolve.','subtitle'),False,False,0)
         side.pack_start(button('+  New experiment',self.new,'primary'),False,False,4)
         side.pack_start(label('EXPERIMENT MEMORY','eyebrow'),False,False,8)
         self.history=Gtk.ListBox();self.history.set_selection_mode(Gtk.SelectionMode.SINGLE);self.history.connect('row-selected',self.history_selected)
@@ -218,6 +194,13 @@ class Desktop(Gtk.Window):
         trial.pack_start(button('Classify with candidate',self.try_candidate),False,False,0)
         self.try_result=label('—','subtitle',True);trial.pack_start(self.try_result,False,False,0);c.pack_start(trial,False,False,0)
 
+    def open_terminal(self):
+        from .terminal import open_terminal
+        try:
+            directory=self.store.root/self.selected if self.selected else self.store.root
+            self.message('Terminal opened in '+open_terminal(directory))
+        except (OSError,ValueError,RuntimeError) as e:self.message(redact(str(e)))
+
     def clear_session_keys(self):
         self.manager.stop()
         clear_credentials()
@@ -301,7 +284,7 @@ class Desktop(Gtk.Window):
         dialog.destroy()
 
     def choose_checkpoint(self):
-        dialog=Gtk.FileChooserDialog(title='Select OVERMIND classifier weights JSON',parent=self,action=Gtk.FileChooserAction.OPEN)
+        dialog=Gtk.FileChooserDialog(title='Select GAFAW / legacy OVERMIND classifier weights JSON',parent=self,action=Gtk.FileChooserAction.OPEN)
         dialog.add_buttons('Cancel',Gtk.ResponseType.CANCEL,'Select',Gtk.ResponseType.OK)
         if dialog.run()==Gtk.ResponseType.OK:
             path=dialog.get_filename()

@@ -1,11 +1,12 @@
 [project]
 name = "overmind-lab"
 version = "0.2.0b1"
-description = "A local, verifiable AI apprenticeship laboratory"
+description = "GAFAW — The Free, Open-Source AI Laboratory"
 requires-python = ">=3.12"
 
 [project.scripts]
 overmind = "overmind.__main__:main"
+gafaw = "overmind.__main__:main"
 
 [tool.setuptools.package-data]
-overmind = ["*.css"]
+overmind = ["*.css", "assets/*.svg"]
