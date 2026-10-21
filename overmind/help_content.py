@@ -196,6 +196,33 @@ TOPICS = {
         'Exports refuse overwrites, built-in IDs are reserved, and custom authors remain responsible for their chosen contrast.'),
 }
 
+TOPICS.update({
+    'help.center':topic('The offline Help Center','Open a searchable offline guide for the current field or workspace; shortcut: F1.',
+        'The guide reuses these contextual explanations and adds workflows and interactive walkthroughs.',
+        'It opens separately so you can keep using the workbench; no model or internet connection is needed.',
+        'Use Back, Previous and Next to explore, or choose a walkthrough to highlight real controls.'),
+    'help.tutorial':topic('Guided walkthroughs','Review steps and highlight actual controls without changing settings or starting jobs.',
+        'Walkthroughs navigate the workbench and highlight controls when you request it.',
+        'Next records a reviewed step; run and evidence prerequisites are checked where indicated, while Skip does not certify completion.',
+        'Progress stays local, and you can restart or leave a walkthrough at any time.'),
+    'help.stanley':topic('Stanley’s contextual assistance','Explain the focused control or current workspace entirely offline; shortcut: Shift+F1.',
+        'Stanley uses the last meaningful focused control, then workflow status and the active tab; explicit topic requests take priority.',
+        'He reads maintained help definitions, not your field values, private text or credentials.',
+        'His search is a local guide lookup, not an AI chat; disable him or adjust humor and motion in Help preferences.'),
+    'help.ontop':topic('Always on Top','Ask your desktop to keep this help window above other windows.',
+        'This is a window-manager request, not a modal dialog; the workbench remains usable.',
+        'Some Linux desktops may ignore stacking or saved position requests.',
+        'The choice is remembered independently for the guide and Stanley companion.'),
+    'help.motion':topic('Reduced motion','Show Stanley without ongoing animation and respect GTK’s system animation preference.',
+        'Reduced motion keeps the character static while preserving every help action.',
+        'Hidden characters have no animation timer, and disabling Stanley removes the companion entirely.',
+        'The system’s disabled-animation preference also stops motion, even if this checkbox is off.'),
+    'help.humor':topic('Optional office-supply humor','Keep the technical explanation while choosing whether Stanley adds dry commentary.',
+        'Sarcasm appears separately from the factual explanation and never replaces instructions or diagnostics.',
+        'Turning it off removes the commentary immediately.',
+        'Stanley never diagnoses arbitrary errors or claims improvements from an animation.'),
+})
+
 SHORT_HELP = {
     'terminal':'Open the selected experiment folder in a terminal; shortcut: Ctrl+Shift+T.',
     'endpoint':'Use a local loopback server address; cloud mentors use their official endpoint.',

@@ -46,3 +46,33 @@ If parameter layout or interaction changes, also run
 `python3 tools/parameter_smoke.py`. Do not run the full suite merely to edit help
 copy. Report what was checked and any untested accessibility/display conditions.
 See [the contextual-help guide](docs/context-help.md) for the implementation pattern.
+
+## Integrated guide, tutorials and Stanley
+
+All future workflows must include a route into the offline Help Center. Concept
+articles reuse `help_content.TOPICS`; workflow articles, short-help routes and
+walkthrough steps belong in `help_guide.py`. Document real prerequisites and
+limitations. The reusable implementation and extension pattern are in
+[docs/help-center.md](docs/help-center.md).
+
+Use declared help IDs and GTK focus events for field-aware assistance. Preserve
+context while opening help utilities, and clear stale fields on tab/experiment
+changes. Never inspect text values, credentials, dataset contents, model responses
+or raw error messages to generate assistant explanations. No pointer polling,
+screen scraping, network lookup or model dependency belongs in core help.
+
+Tutorials may navigate, highlight and explain actual controls. They must never
+change settings, start workers, call inference, download or install anything.
+Completion records reviewed steps; scientific verification needs actual evidence.
+Use stable widget targets, with `app.help_system.register_target` for new controls.
+
+Reactions must originate from authoritative status/evidence categories, remain
+non-blocking and never summon a window or steal focus. Do not celebrate historical
+runs as new events, infer quality from completion/loss, or diagnose arbitrary
+errors. Keep humor separate from instructions and respect all disabled/reduced
+motion preferences. Hidden/disabled/static Stanley actors must have no timer.
+
+For changes here, run the focused `test_help_center.py` tests and
+`tools/help_center_smoke.py` on a GTK display. The latter uses temporary data and
+fixture status transitions, not real training. Continue to use the existing
+contextual-help and parameter smoke checks when those interactions change.

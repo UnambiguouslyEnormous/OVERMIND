@@ -77,6 +77,9 @@ The following captures document the earlier OVERMIND interface; the current desk
 
 Select an image to view it at full size. Some captures show an earlier version label. Screenshots document these views; the [full desktop acceptance checklist](docs/beta-release.md#remaining-checks-before-public-beta) remains pending.
 
+
+The offline **Help / User Guide** (**F1**) includes searchable articles and guided walkthroughs. **Stanley the Stapler** (**Shift+F1**) explains the focused field or workspace without an AI model. Tutorials highlight real controls; they never start jobs or change settings. Disable Stanley, humor or animation in Help preferences. See the [Help Center guide](docs/help-center.md).
+
 ## Run
 
 On **Ubuntu 24.04 or a compatible Pop!_OS installation**, use system Python **3.12+**, Bash, and GTK 3/PyGObject:

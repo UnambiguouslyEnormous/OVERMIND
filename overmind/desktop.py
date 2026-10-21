@@ -18,6 +18,7 @@ from .ollama import discover
 from .skins import SkinLibrary, PreparedSkin, export_package
 from .widgets import protect_parameters
 from .context_help import install_help_styles, short_help, contextual, help_label, with_help
+from .help_center import HelpController
 
 CLOUD_FORM_DEFAULTS={"budget_usd":"0","input_usd_per_million":"0","output_usd_per_million":"0","max_output_tokens":"2048"}
 
@@ -88,6 +89,7 @@ class Desktop(Gtk.Window):
         self.status=label('Ready. The built-in experiment needs no downloads.','subtitle',True)
         self.setup_content.pack_end(self.status,False,False,0)
         if self.skin_startup_error:self.message('Using Black Titanium: '+self.skin_startup_error)
+        self.help_system=HelpController(self,side,header,accelerators)
         protect_parameters(self)
         self.tick();GLib.timeout_add(500,self.tick)
 
@@ -191,6 +193,7 @@ class Desktop(Gtk.Window):
 
     def card(self,title,subtitle=None,help_key=None):
         w=box(12);w.get_style_context().add_class('card')
+        if help_key:contextual(w,help_key)
         w.pack_start(help_label(title,help_key,'eyebrow') if help_key else label(title,'eyebrow'),False,False,0)
         if subtitle:w.pack_start(label(subtitle,'subtitle',True),False,False,0)
         return w
@@ -341,7 +344,9 @@ class Desktop(Gtk.Window):
         def work():
             result=subprocess.run(command,capture_output=True,text=True,timeout=30,env=env,cwd=Path(__file__).resolve().parent.parent)
             return result.stdout or result.stderr or 'Preflight exited without diagnostics.'
-        self.background(work,lambda result,error:self.lora_status.set_text(error or result))
+        def done(result,error):
+            self.lora_status.set_text(error or result);self.help_system.compatibility(result,error)
+        self.background(work,done)
 
     def edit_instructions(self):
         from .sft_data import example
@@ -861,6 +866,7 @@ class Desktop(Gtk.Window):
     def refresh_run(self):
         if not self.selected:return
         run=self.store.get(self.selected);s=run['state'];cfg=run['config'];report=s.get('report')
+        if hasattr(self,'help_system'):self.help_system.observe(run)
         self.run_title.set_text('Experiment '+self.selected)
         method='Generative SFT + LoRA · exact-reference match (not factual/style grading)' if cfg['student']['kind']=='local_lora' else 'Weight training · CPU softmax classifier' if cfg['student']['kind']=='linear' else 'Prompt / retrieval optimization · base weights unchanged'
         bill=self.store.billing(self.selected)
@@ -932,6 +938,7 @@ class Desktop(Gtk.Window):
         except Exception as e:self.try_result.set_text(redact(str(e)))
 
     def close(self,*_):
+        self.help_system.remember_all()
         self.cancel_playground();self.manager.stop();Gtk.main_quit();return False
 
 def launch(root):

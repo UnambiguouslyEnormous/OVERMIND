@@ -22,3 +22,5 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md), the [MIT code license](../LICENSE), a
 - [Phase Two: Configure UX, local Qwen LoRA and Personality Playground](local-lora.md)
 
 - [Contextual help and UI contribution standard](context-help.md)
+
+- [Offline Help Center, interactive Quick Start and Stanley the Stapler](help-center.md)

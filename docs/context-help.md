@@ -84,3 +84,9 @@ remain useful beyond the automated widget checks.
 
 This standard applies to future interface additions as described in
 [AGENTS.md](../AGENTS.md).
+
+The [integrated Help Center and Stanley](help-center.md) extend these same
+components. Popovers can open matching articles, workflows have guided steps,
+and field-aware assistance uses explicit help IDs rather than field contents.
+New short-help IDs also need a `SHORT_ROUTES` entry; new workflow controls need
+stable tutorial targets where useful. Help content remains fully offline.

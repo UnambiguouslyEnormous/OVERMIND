@@ -8,3 +8,16 @@ popover.gafaw-help .help-heading { font-size: 16px; font-weight: bold; }
 popover.gafaw-help button { background-image: none; background-color: #33463d; color: #eff4f2; border: 1px solid #788b86; border-radius: 3px; padding: 7px 12px; text-shadow: none; }
 popover.gafaw-help button:hover { background-color: #486153; }
 popover.gafaw-help button:focus { outline: 2px solid #c3e5ff; outline-offset: 2px; }
+/* Offline reference surfaces keep a stable reading palette across community skins. */
+window.gafaw-guide, .gafaw-guide viewport, .gafaw-guide list { background-image: none; background-color: #20272b; color: #eff4f2; }
+.gafaw-guide label, .gafaw-guide checkbutton, .gafaw-guide textview text, .gafaw-guide textview { color: #eff4f2; font-family: "DejaVu Sans", sans-serif; font-size: 14px; text-shadow: none; }
+.gafaw-guide textview, .gafaw-guide textview text { background-image: none; background-color: #20272b; }
+.gafaw-guide .help-heading { font-size: 19px; font-weight: bold; }
+.gafaw-guide .stanley-quip { color: #b6cebc; font-style: italic; }
+.gafaw-guide button, .gafaw-guide combobox button { background-image: none; background-color: #33463d; color: #eff4f2; border: 1px solid #788b86; padding: 6px 9px; text-shadow: none; box-shadow: none; }
+.gafaw-guide button:hover { background-color: #486153; }
+.gafaw-guide button:disabled { background-color: #29322e; color: #a4b0aa; }
+.gafaw-guide entry { background-image: none; background-color: #10191a; color: #eff4f2; }
+.gafaw-guide list row:selected { background-color: #3b5546; color: #eff4f2; }
+.gafaw-guide *:focus { outline: 2px solid #c3e5ff; outline-offset: 1px; }
+.gafaw-tour-target { outline: 3px solid #ffd780; outline-offset: 3px; }

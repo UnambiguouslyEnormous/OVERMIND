@@ -64,6 +64,15 @@ def help_button(key):
             reading.set_propagate_natural_height(True);reading.set_max_content_height(340)
             reading.set_propagate_natural_width(True);reading.add(paragraphs)
             content.pack_start(reading,True,True,0)
+            hub=getattr(trigger.get_toplevel(),'_gafaw_help_controller',None)
+            if hub:
+                links=Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL,spacing=8)
+                more=Gtk.Button(label='Learn More');more.connect('clicked',lambda *_:(popover.popdown(),hub.open_guide(key)))
+                stanley=Gtk.Button(label='Ask Stanley');stanley.connect('clicked',lambda *_:(popover.popdown(),hub.ask(key)))
+                links.pack_start(more,False,False,0);links.pack_start(stanley,False,False,0)
+                popover._gafaw_stanley_link=stanley
+                stanley.set_no_show_all(not hub.prefs.data['stanley']);stanley.set_visible(hub.prefs.data['stanley'])
+                content.pack_start(links,False,False,0)
             close=Gtk.Button(label='Close');close.set_halign(Gtk.Align.END)
             close.connect('clicked',lambda *_:popover.popdown());content.pack_start(close,False,False,0)
             popover.add(content)
