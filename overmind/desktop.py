@@ -16,6 +16,9 @@ from .providers import provider, inspection_summary
 from .security import register, redact, clear_credentials, harden_process
 from .ollama import discover
 from .skins import SkinLibrary, PreparedSkin, export_package
+from .widgets import protect_parameters
+
+CLOUD_FORM_DEFAULTS={"budget_usd":"0","input_usd_per_million":"0","output_usd_per_million":"0","max_output_tokens":"2048"}
 
 
 def label(text,style=None,wrap=False):
@@ -81,6 +84,7 @@ class Desktop(Gtk.Window):
         self.status=label('Ready. The built-in experiment needs no downloads.','subtitle',True)
         self.setup_content.pack_end(self.status,False,False,0)
         if self.skin_startup_error:self.message('Using Black Titanium: '+self.skin_startup_error)
+        protect_parameters(self)
         self.tick();GLib.timeout_add(500,self.tick)
 
     def activate_skin(self,identifier,persist=True):
@@ -189,6 +193,10 @@ class Desktop(Gtk.Window):
     def setup_tab(self):
         c=self.setup_content=self.page('01   Configure')
         c.pack_start(label('A laboratory for learning.','title'),False,False,0)
+        reset=button('Reset to Defaults',self.reset_configuration)
+        reset.set_tooltip_text('Reset the next experiment: roles/models, objective, dataset, checkpoint, limits, budgets and sharing permissions. Credentials, skins and saved experiments stay intact.')
+        c.pack_start(reset,False,False,0)
+        c.pack_start(label('Factory defaults: CPU classifier + curriculum controller · built-in dataset · 18 epochs · 15 minutes · 240 calls · 512 MB · 3 candidates. Reset affects only the next experiment.','subtitle',True),False,False,0)
         c.pack_start(label('Connect a teacher, choose a student, and measure what actually changes.','subtitle',True),False,False,0)
         roles=box(16,True);c.pack_start(roles,False,False,0)
         self.role_widgets={}
@@ -220,7 +228,8 @@ class Desktop(Gtk.Window):
                 cloud=combo.get_active_id() in ('openai','anthropic')
                 url.set_sensitive(external and not cloud);model.set_sensitive(external);check.set_sensitive(external)
                 if r=='mentor':
-                    self.api_key.set_visible(cloud);self.api_key.set_text('')
+                    self.api_key.set_visible(cloud)
+                    if not getattr(self,'resetting_config',False):self.api_key.set_text('')
                 if cloud:
                     info.set_text('Official HTTPS endpoint. Discover/inspect checks metadata only; paid generation requires the authorization below.');return
                 info.set_text('Loopback only. Server and model must already be installed.' if external else
@@ -561,6 +570,22 @@ class Desktop(Gtk.Window):
                 self.checkpoint_path=path;self.checkpoint_label.set_text('Base checkpoint: '+Path(path).name)
             except Exception as e:self.message(redact(str(e)))
         dialog.destroy()
+
+    def reset_configuration(self):
+        self.resetting_config=True
+        try:
+            for role,(combo,url,model,_,_) in self.role_widgets.items():
+                combo.set_active_id(DEFAULTS[role]['kind'])
+                url.set_text('http://127.0.0.1:11434')
+                model.remove_all();model.get_child().set_text('')
+            self.objective.set_text(DEFAULTS['objective'])
+            for key,spin in self.spins.items():spin.set_value(DEFAULTS[key])
+            self.attempts.set_value(DEFAULTS['attempts'])
+            for key,field in self.cloud_fields.items():field.set_text(CLOUD_FORM_DEFAULTS[key])
+            self.cloud_authorized.set_active(False);self.cloud_sharing.set_active(False);self.consent.set_active(False)
+            self.reset_dataset();self.reset_checkpoint()
+        finally:self.resetting_config=False
+        self.message('Next experiment reset to factory defaults. Credentials, skin and saved experiments preserved.')
 
     def reset_checkpoint(self):
         self.checkpoint_path=None;self.checkpoint_label.set_text('Fresh CPU classifier · no pretrained knowledge')
