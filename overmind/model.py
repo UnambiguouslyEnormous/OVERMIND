@@ -11,6 +11,8 @@ class TextStudent:
         self.labels = labels
         self.dimensions = dimensions
         self.weights = weights or [[0.0] * dimensions for _ in labels]
+        self.optimizer_steps = 0
+        self.last_epoch = {}
 
     def features(self, text):
         words = re.findall(r"[a-z0-9]+", text.lower())
@@ -35,20 +37,24 @@ class TextStudent:
         rows = list(rows)
         random.Random(seed).shuffle(rows)
         loss = 0
+        gradient_sum = 0
         for row in rows:
             guard()
             f = self.features(row['input'])
             p = self.probabilities(f)
             target = self.labels.index(row['target'])
             loss -= math.log(max(1e-15,p[target]))
+            gradient_sum += math.sqrt(sum((p[c] - (c == target))**2 for c in range(len(p))) * sum(v*v for v in f.values()))
             for c,w in enumerate(self.weights):
                 error = p[c] - (c == target)
                 for i,v in f.items():
                     w[i] -= rate * error * v
+            self.optimizer_steps += 1
+        self.last_epoch = {"examples":len(rows), "mean_gradient_l2":gradient_sum/len(rows), "learning_rate":rate}
         return loss/len(rows)
 
     def export(self):
-        return {'format':'overmind.softmax.v1','labels':self.labels,'dimensions':self.dimensions,'weights':self.weights}
+        return {'format':'overmind.softmax.v1','labels':self.labels,'dimensions':self.dimensions,'weights':self.weights,'optimizer_steps':self.optimizer_steps}
 
     @classmethod
     def restore(cls, artifact):
@@ -57,4 +63,7 @@ class TextStudent:
         labels, dims, weights = artifact['labels'], artifact['dimensions'], artifact['weights']
         if not 2 <= len(labels) <= 32 or not 2 <= dims <= 8192 or len(weights) != len(labels) or any(len(w)!=dims or not all(isinstance(v,(int,float)) and math.isfinite(v) for v in w) for w in weights):
             raise ValueError('Invalid student weights.')
-        return cls(labels,dims,weights)
+        steps=artifact.get('optimizer_steps',0)
+        if type(steps) is not int or steps<0:raise ValueError('Invalid optimizer-step counter.')
+        model=cls(labels,dims,weights);model.optimizer_steps=steps
+        return model

@@ -235,6 +235,8 @@ class Experiment:
             self.store.update(self.rid,status='running')
         self.guard()
         if self.s['phase']=='inspect':
+            from .environment import snapshot
+            self.store.artifact(self.rid,'environment.json',snapshot())
             self.s['hardware']=inspect()
             if self.dataset.get('license') != 'CC0-1.0':
                 self.event('license','User-supplied license declaration: '+self.dataset['license']+'. Applicability remains the dataset owner’s responsibility.')
@@ -280,6 +282,7 @@ class Experiment:
         while self.s['epoch']<self.c['epochs']:
             self.guard()
             epoch=self.s['epoch']
+            epoch_start=time.monotonic()
             rows=self.dataset['train']
             # Curriculum is derived exclusively from TRAIN errors.
             practice=[r for r in rows if model.predict(r['input'])!=r['target']]
@@ -287,10 +290,19 @@ class Experiment:
             validation=score(self.dataset['validation'],model.predict,self.guard)
             if validation['accuracy']>self.s['best_validation']:
                 self.store.artifact(self.rid,'candidate.json',model.export())
+                self.store.artifact(self.rid,'candidate-validation.json',validation)
                 self.s['best_validation']=validation['accuracy']
             self.s['epoch']=epoch+1
             self.store.artifact(self.rid,'working.json',{'model':model.export(),'epoch':epoch+1,'best_validation':self.s['best_validation']})
             self.store.artifact(self.rid,'latest-validation.json',validation)
+            try:metrics=self.store.read(self.rid,'training-metrics.json')
+            except FileNotFoundError:metrics=[]
+            metrics=[m for m in metrics if m['epoch']<epoch+1]
+            duration=time.monotonic()-epoch_start
+            metrics.append({'epoch':epoch+1,'loss':loss,'validation_accuracy':validation['accuracy'],
+                            'optimizer_steps':model.optimizer_steps,'epoch_seconds':duration,
+                            'examples_per_second':model.last_epoch['examples']/duration,**model.last_epoch})
+            self.store.artifact(self.rid,'training-metrics.json',metrics)
             self.event('training',f'Epoch {epoch+1}/{self.c["epochs"]} · loss {loss:.4f} · validation {validation["accuracy"]:.1%} · {len(practice)} extra practice examples')
             self.save()
             if self.s['epoch']%6==0 and self.s['epoch']<self.c['epochs']:
@@ -327,7 +339,21 @@ class Experiment:
     def verify(self):
         self.check_student_identity()
         candidate=self.store.read(self.rid,'candidate.json')
-        if self.c['student']['kind']=='linear': cp=TextStudent.restore(candidate).predict
+        integrity=None
+        if self.c['student']['kind']=='linear':
+            from .integrity import training_evidence
+            integrity=training_evidence(self.base_model().export(),candidate)
+            # Evaluate a newly restored checkpoint against the selected validation predictions.
+            reloaded=TextStudent.restore(candidate)
+            try:selected_validation=self.store.read(self.rid,'candidate-validation.json')
+            except FileNotFoundError:selected_validation=None
+            integrity['checkpoint_reload_matches_validation']=(score(self.dataset['validation'],reloaded.predict,self.guard)==selected_validation) if selected_validation else None
+            self.store.artifact(self.rid,'training-integrity.json',integrity)
+            if not integrity['parameters_changed']:
+                raise ValueError('Training integrity rejected: zero parameter updates. Evidence saved; candidate cannot be promoted.')
+            if integrity['checkpoint_reload_matches_validation'] is False:
+                raise ValueError('Training integrity rejected: checkpoint reload predictions differ from selected validation.')
+            cp=reloaded.predict
         else:
             p=provider(self.c['student']);cp=lambda t:self.candidate_predict(p,candidate,t)
         bp=self.baseline_predictor()
@@ -349,6 +375,11 @@ class Experiment:
         report.update({'method':'weight_training' if self.c['student']['kind']=='linear' else candidate.get('technique','prompt_optimization'),
             'dataset_sha256':self.s['dataset_sha256'],'candidate_sha256':__import__('hashlib').sha256((self.store.root/self.rid/'candidate.json').read_bytes()).hexdigest(),
             'test_count':len(pairs),'validation_accuracy':self.s['best_validation']})
+        if integrity is not None:
+            report['training_integrity']=integrity
+            if not integrity['verified'] or integrity['checkpoint_reload_matches_validation'] is not True:
+                report['promoted']=False
+                report['integrity_notice']='Legacy or incomplete training evidence; promotion blocked. Run a fresh experiment for verified counters and reload evidence.'
         self.store.artifact(self.rid,'report.json',report)
         if report['promoted']:
             self.store.artifact(self.rid,'promoted.json',{'artifact':'candidate.json','sha256':report['candidate_sha256'],'reason':report['policy']})
