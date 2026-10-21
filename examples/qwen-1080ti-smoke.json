@@ -1,0 +1,27 @@
+{
+  "objective": "GPU-only smoke: two real Qwen LoRA optimizer steps, adapter save, and verified fresh-base adapter reload. No capability improvement claim.",
+  "mentor": {
+    "kind": "controller"
+  },
+  "student": {
+    "kind": "local_lora",
+    "model": "local-models/Qwen2.5-0.5B-Instruct"
+  },
+  "epochs": 1,
+  "minutes": 5,
+  "memory_mb": 8192,
+  "lora": {
+    "model_license": "Apache-2.0",
+    "device": "cuda",
+    "precision": "fp32",
+    "max_length": 64,
+    "max_steps": 2,
+    "learning_rate": 0.001,
+    "rank": 2,
+    "alpha": 4,
+    "accumulation": 1,
+    "max_new_tokens": 1,
+    "seed": 42,
+    "system_prompt": ""
+  }
+}

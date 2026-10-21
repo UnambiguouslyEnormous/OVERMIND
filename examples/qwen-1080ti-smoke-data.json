@@ -1,0 +1,41 @@
+{
+  "format": "gafaw.sft.v1",
+  "name": "Six-example Qwen GPU mechanics smoke",
+  "license": "CC0-1.0",
+  "train": [
+    {
+      "input": "Reply with one word: hello.",
+      "target": "Hello",
+      "axis": "instruction"
+    },
+    {
+      "input": "Reply with one word: goodbye.",
+      "target": "Goodbye",
+      "axis": "instruction"
+    }
+  ],
+  "validation": [
+    {
+      "input": "Name a primary color.",
+      "target": "Red",
+      "axis": "instruction"
+    },
+    {
+      "input": "Name a frozen form of water.",
+      "target": "Ice",
+      "axis": "instruction"
+    }
+  ],
+  "test": [
+    {
+      "input": "What is two plus two?",
+      "target": "Four",
+      "axis": "instruction"
+    },
+    {
+      "input": "What is the opposite of down?",
+      "target": "Up",
+      "axis": "instruction"
+    }
+  ]
+}
