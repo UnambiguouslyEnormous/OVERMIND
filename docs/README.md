@@ -18,3 +18,5 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md), the [MIT code license](../LICENSE), a
 - [GAFAW Black Titanium workflows and current implementation status](gafaw.md)
 
 - [Skin Library and community skin manifest/package format](skins.md)
+
+- [Phase Two: Configure UX, local Qwen LoRA and Personality Playground](local-lora.md)

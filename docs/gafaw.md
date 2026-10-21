@@ -86,6 +86,8 @@ Open Terminal Here / Ctrl+Shift+T opens the selected experiment directory, or la
 
 ## Implementation status
 
+**Phase Two update:** the earlier deferred generative foundation is now implemented as an experimental local Qwen SFT/LoRA worker with instruction datasets and Personality Playground. No generative training was executed in the implementation environment (optional dependencies absent). See the [current local training guide](local-lora.md). The table below describes the original Frankenstein I milestone.
+
 | Area | Working now | Remaining |
 | --- | --- | --- |
 | Desktop | GAFAW branding, original Black Titanium assets, native controls, terminal action | Manual accessibility/HiDPI/resizing acceptance; additional artwork |

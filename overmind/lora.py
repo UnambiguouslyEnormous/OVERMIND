@@ -239,7 +239,7 @@ def run(experiment):
                 exp.s['optimizer_steps']=steps;exp.save()
                 if steps>=c['max_steps']:break
         exp.guard();validation=evaluate(model,data['validation'],c['system_prompt'])
-        metrics.append({'epoch':epoch+1,'loss':sum(losses)/len(losses),'validation_nll':validation['response_nll'],
+        metrics.append({'epoch':epoch+1,'examples':len(losses),'epoch_complete':len(losses)==len(order),'loss':sum(losses)/len(losses),'validation_nll':validation['response_nll'],
                         'validation_accuracy':validation['accuracy'],'learning_rate':c['learning_rate'],'optimizer_steps':steps,
                         'mean_gradient_l2':sum(gradients)/len(gradients),'epoch_seconds':time.monotonic()-epoch_start,
                         'examples_per_second':len(losses)/(time.monotonic()-epoch_start),'timestamp':time.time()})

@@ -37,6 +37,14 @@ Optional GPU acceleration: When using locally hosted LLMs through Ollama or anot
 - **Connect optional mentors:** use Ollama, a local OpenAI-compatible engine, or explicitly authorized OpenAI/Anthropic cloud mentoring.
 - **Set boundaries:** choose wall time, worker memory, inference-call limits, and cloud budget. Pause or stop the desktop worker and reopen saved evidence.
 
+## Phase Two: safe controls and local training foundation
+
+Wheel scrolling over parameter controls now scrolls the page without changing settings. **Reset to Defaults** restores the next experiment while preserving credentials, skins and saved data.
+
+The Configure student selector includes **Local HF Qwen · real SFT + LoRA**, backed by an isolated optional worker, explicit instruction/response splits in Dataset Workshop, adapter/checkpoint evidence, and stock/prompted/adapter panes in the existing Evidence workspace. A fast prompt-only baseline can use an already configured local endpoint. These methods remain explicitly distinct.
+
+**Honest runtime status:** PyTorch/Transformers/PEFT are absent on the development machine, so no generative step or adapter reload was executed there. The implemented backend is experimental, with an opt-in tiny actual Qwen smoke and real missing-dependency diagnostics. No model or ML stack is downloaded automatically. [Setup, demonstration paths, hardware limits and verification](docs/local-lora.md).
+
 ## Black Titanium laboratory
 
 The original GTK 3 desktop now has a reusable [Skin Library](docs/skins.md) with live switching, validated `.gafawskin` import/export, Black Titanium as its default, and Phosphor Night as a second built-in. Black Titanium has a procedurally generated brushed-metal skin, beveled native controls, green LCD measurements, and an original flask emblem. Regenerate the dependency-free SVG artwork with `python3 tools/generate_skin.py`. **Open Terminal Here** (Ctrl+Shift+T) opens the selected experiment directory with a sanitized environment.
@@ -48,7 +56,7 @@ The original GTK 3 desktop now has a reusable [Skin Library](docs/skins.md) with
 
 Existing `overmind` module/command, `./run.sh`, laboratory markers, database schema, saved classifier format, license, and remote URL remain compatible. New runs carry additional evidence; legacy runs can still be viewed and restored. Legacy runs without complete integrity evidence cannot earn fresh verified promotion on recovery.
 
-Read the [GAFAW workflow and implementation status](docs/gafaw.md) for file schemas, CLI commands, tested scope, and unfinished backlog. Generative LoRA/SFT, remote workers, and distributed training are **not implemented** in this release.
+Read the [GAFAW workflow and implementation status](docs/gafaw.md) for file schemas, CLI commands, tested scope, and unfinished backlog. An **experimental local Qwen SFT/LoRA path and Personality Playground** are now implemented; optional dependencies are isolated and no generative optimizer run was executed in the development environment. See the [local training guide](docs/local-lora.md). Remote workers and distributed training remain unimplemented.
 
 ## Screenshots
 
@@ -158,7 +166,7 @@ More details: [troubleshooting](docs/user-guide.md#troubleshooting) · [mentor r
 
 ## Limits and beta status
 
-This beta evaluates exact-label text classification. Imported datasets must use the same labeled classification schema. It does not implement generative-model LoRA/QLoRA/SFT, automatic continual learning, semantic/vector RAG, or general intelligence training. Retrieval uses lexical matching. Anthropic, retrieval, and several provider paths have fixture coverage without a published live improvement result. An automated GTK exercise now covers dataset review, a real CPU worker, integrity evidence, the loss chart, failure inspection, and notes. Manual accessibility, HiDPI, resizing, and physical GPU acceptance remain outstanding.
+This beta evaluates exact-label text classification. Imported datasets must use the same labeled classification schema. Experimental local Qwen SFT/LoRA uses a separate reviewed instruction schema and optional runtime; its actual training/reload path remains unexecuted here because dependencies are absent. QLoRA, automatic continual learning, semantic/vector RAG, and general intelligence training are not implemented. Retrieval uses lexical matching. Anthropic, retrieval, and several provider paths have fixture coverage without a published live improvement result. An automated GTK exercise now covers dataset review, a real CPU worker, integrity evidence, the loss chart, failure inspection, and notes. Manual accessibility, HiDPI, resizing, and physical GPU acceptance remain outstanding.
 
 Worker limits do not constrain a separate inference server's resources. Experiment files are private by filesystem permissions but unencrypted. Cloud dispatch sends explicitly authorized context; the built-in path has no telemetry or automatic uploads. The held-out split is not a security boundary against a malicious local engine. See [runtime boundaries](docs/security.md#worker-and-inference-boundaries), [security protections](docs/security.md), and the [full capability status](docs/experiments.md#capability-status).
 
