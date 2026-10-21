@@ -42,8 +42,32 @@ def _main():
     w=commands.add_parser('worker',help=argparse.SUPPRESS);w.add_argument('id')
     export=commands.add_parser('example-dataset');export.add_argument('path')
     predict=commands.add_parser('predict',help='Use a trained weight artifact');predict.add_argument('artifact');predict.add_argument('text');predict.add_argument('--allow-local-inference',action='store_true',help='Authorize one bounded local LLM request for a prompt/retrieval artifact')
+    workshop=commands.add_parser('prepare-dataset',help='Import, deduplicate, split and export a labeled dataset version')
+    workshop.add_argument('source');workshop.add_argument('output')
+    workshop.add_argument('--license',default='',help='Required permission statement for unsplit files')
+    workshop.add_argument('--seed',type=int,default=42)
+    local=commands.add_parser('inspect-model',help='Read local HF checkpoint metadata without loading weights or code')
+    local.add_argument('path')
+    bundle=commands.add_parser('export-bundle',help='Export private local evidence; dataset text/weights excluded by default')
+    bundle.add_argument('id');bundle.add_argument('output')
+    bundle.add_argument('--include-dataset',action='store_true');bundle.add_argument('--include-weights',action='store_true')
+    check_bundle=commands.add_parser('check-bundle',help='Verify a bundle without extracting or executing contents')
+    check_bundle.add_argument('path')
+    comparison=commands.add_parser('compare',help='Compare two completed runs using recorded evidence')
+    comparison.add_argument('left');comparison.add_argument('right')
     args=parser.parse_args()
     try:
+        if args.command=='check-bundle':
+            from .bundle import validate_bundle
+            print(json.dumps(redact(validate_bundle(args.path)),indent=2));return 0
+        if args.command=='prepare-dataset':
+            from .workshop import import_file,export_version,summary
+            dataset=import_file(args.source,args.license,args.seed)
+            export_version(dataset,args.output)
+            print(json.dumps(summary(dataset),indent=2));return 0
+        if args.command=='inspect-model':
+            from .inventory import inspect_local
+            print(json.dumps(redact(inspect_local(args.path)),indent=2));return 0
         if args.command=='worker':return worker(args.data,args.id)
         if args.command in (None,'desktop'):
             from .desktop import launch
@@ -63,6 +87,12 @@ def _main():
             artifact=json.loads(path.read_text())
             print(predict_artifact(artifact,args.text,args.allow_local_inference));return 0
         store=Store(args.data)
+        if args.command=='export-bundle':
+            from .bundle import export_bundle
+            print(json.dumps(export_bundle(store,args.id,args.output,args.include_dataset,args.include_weights),indent=2));return 0
+        if args.command=='compare':
+            from .science import compare
+            print(json.dumps(redact(compare(store,args.left,args.right)),indent=2));return 0
         if args.command=='list':
             for r in store.list():print(r['id'],r['status'])
             return 0

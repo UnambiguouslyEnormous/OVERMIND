@@ -5,7 +5,7 @@ import threading
 import time
 import gi
 gi.require_version('Gtk','3.0')
-from gi.repository import Gtk, Gdk, GLib
+from gi.repository import Gtk, Gdk, GLib, GdkPixbuf
 
 from . import DISPLAY_VERSION
 from .data import load
@@ -42,14 +42,16 @@ class Desktop(Gtk.Window):
         super().__init__(title='GAFAW — The Free, Open-Source AI Laboratory')
         self.set_default_size(1280,900);self.set_size_request(980,700)
         self.manager=Manager(root);self.store=self.manager.store
-        self.selected=None;self.dataset_path=None;self.checkpoint_path=None;self.history_signature=None;self.last_events=None;self.last_hardware=0
+        self.selected=None;self.prepared_dataset=None;self.dataset_path=None;self.checkpoint_path=None;self.history_signature=None;self.last_events=None;self.last_hardware=0
         self.connect('delete-event',self.close)
         css=Gtk.CssProvider();css.load_from_path(str(Path(__file__).with_name('titanium.css')))
         Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(),css,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         header=Gtk.HeaderBar();header.set_show_close_button(True);header.set_title('GAFAW')
         header.set_subtitle(f'The Free, Open-Source AI Laboratory  /  {DISPLAY_VERSION}')
         self.hardware_label=label('Detecting hardware…','subtitle');header.pack_end(self.hardware_label)
-        header.pack_start(button('Open Terminal Here',self.open_terminal))
+        terminal_button=button('Open Terminal Here',self.open_terminal)
+        terminal_button.set_tooltip_text('Open the selected experiment directory · Ctrl+Shift+T')
+        header.pack_start(terminal_button)
         accelerators=Gtk.AccelGroup();self.add_accel_group(accelerators)
         key,mods=Gtk.accelerator_parse('<Control><Shift>t')
         accelerators.connect(key,mods,Gtk.AccelFlags.VISIBLE,lambda *_:self.open_terminal() or True)
@@ -66,8 +68,10 @@ class Desktop(Gtk.Window):
         side.pack_start(scroll(self.history),True,True,0)
         side.pack_start(label('LOCAL STUDENT\nCloud mentor requires consent\nNo automatic file uploads','subtitle'),False,False,0)
         side.pack_start(label(str(self.store.root),'subtitle',True),False,False,0)
-        self.tabs=Gtk.Notebook();layout.pack_start(self.tabs,True,True,0)
-        self.setup_tab();self.live_tab();self.evidence_tab()
+        self.sidebar_status=label('','subtitle',True);self.sidebar_status.set_max_width_chars(30)
+        side.pack_start(self.sidebar_status,False,False,0)
+        self.tabs=Gtk.Notebook();self.tabs.set_scrollable(True);layout.pack_start(self.tabs,True,True,0)
+        self.setup_tab();self.live_tab();self.evidence_tab();self.workshop_tab();self.system_tab();self.notebook_tab()
         self.status=label('Ready. The built-in experiment needs no downloads.','subtitle',True)
         self.setup_content.pack_end(self.status,False,False,0)
         self.tick();GLib.timeout_add(500,self.tick)
@@ -173,6 +177,7 @@ class Desktop(Gtk.Window):
         self.resume_button=button('Resume / Recover',self.resume);controls.pack_start(self.resume_button,False,False,0)
         self.stop_button=button('Emergency stop',self.stop,'danger');controls.pack_start(self.stop_button,False,False,0)
         c.pack_start(controls,False,False,0)
+        self.loss_image=Gtk.Image();self.loss_image.set_halign(Gtk.Align.START);c.pack_start(self.loss_image,False,False,0)
         c.pack_start(label('DECISIONS & MEASUREMENTS','eyebrow'),False,False,0)
         self.journal=Gtk.TextView();self.journal.set_editable(False);self.journal.set_cursor_visible(False);self.journal.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         sc=scroll(self.journal);sc.set_size_request(-1,300);c.pack_start(sc,True,True,0)
@@ -182,8 +187,9 @@ class Desktop(Gtk.Window):
         c.pack_start(label('Proof before promotion.','title'),False,False,0)
         self.verification=label('No completed comparison yet. Improvement is never assumed.','subtitle',True);c.pack_start(self.verification,False,False,0)
         self.artifact_label=label('Candidates, dataset snapshots, raw predictions and reports are saved locally.','subtitle',True);c.pack_start(self.artifact_label,False,False,0)
+        c.pack_start(button('Export private evidence bundle…',self.export_evidence_bundle),False,False,0)
         self.artifact_choice=Gtk.ComboBoxText()
-        for name in ('report.json','candidate.json','baseline-validation.json','latest-validation.json','baseline-test.json','candidate-test.json','promoted.json','billing.json'):
+        for name in ('report.json','training-integrity.json','training-metrics.json','candidate-validation.json','candidate.json','baseline-validation.json','latest-validation.json','baseline-test.json','candidate-test.json','promoted.json','billing.json'):
             self.artifact_choice.append_text(name)
         self.artifact_choice.set_active(0);self.artifact_choice.connect('changed',lambda _:self.show_artifact())
         c.pack_start(self.artifact_choice,False,False,0)
@@ -193,6 +199,167 @@ class Desktop(Gtk.Window):
         self.try_input=entry('I need a refund for a duplicate charge');trial.pack_start(self.try_input,False,False,0)
         trial.pack_start(button('Classify with candidate',self.try_candidate),False,False,0)
         self.try_result=label('—','subtitle',True);trial.pack_start(self.try_result,False,False,0);c.pack_start(trial,False,False,0)
+
+    def workshop_tab(self):
+        c=self.page('04   Dataset Workshop')
+        c.pack_start(label('Good science starts with clean data.','title'),False,False,0)
+        c.pack_start(label('Import labeled JSONL, CSV, TSV or tab-separated TXT (input,target columns; optional split). JSON retains authored splits. Review the editable JSONL before use.','subtitle',True),False,False,0)
+        row=box(8,True)
+        self.workshop_license=entry('');self.workshop_license.set_placeholder_text('License / permission statement (required for new imports)')
+        row.pack_start(self.workshop_license,True,True,0)
+        self.split_seed=Gtk.SpinButton.new_with_range(0,4294967295,1);self.split_seed.set_value(42)
+        row.pack_start(label('Split seed','subtitle'),False,False,0);row.pack_start(self.split_seed,False,False,0)
+        c.pack_start(row,False,False,0)
+        actions=box(8,True)
+        actions.pack_start(button('Import labeled file…',self.import_dataset),False,False,0)
+        actions.pack_start(button('Load benchmark into editor',self.edit_benchmark),False,False,0)
+        c.pack_start(actions,False,False,0)
+        self.dataset_editor=Gtk.TextView();self.dataset_editor.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self.dataset_editor.set_monospace(True)
+        sc=scroll(self.dataset_editor);sc.set_size_request(-1,280);c.pack_start(sc,True,True,0)
+        actions=box(8,True)
+        actions.pack_start(button('Validate & use reviewed data',self.use_workshop,'primary'),False,False,0)
+        actions.pack_start(button('Export new dataset version…',self.export_dataset),False,False,0)
+        c.pack_start(actions,False,False,0)
+        self.workshop_result=label('No file imported. Unassigned rows are deduplicated, then stratified 70/15/15. Every split must contain ≥8 rows and every label. Exact overlap is blocked; review paraphrases manually.','subtitle',True)
+        self.workshop_result.set_selectable(True);c.pack_start(self.workshop_result,False,False,0)
+        self.workshop_data=None
+
+    def edit_benchmark(self):
+        self.populate_workshop(load())
+
+    def populate_workshop(self,data):
+        from .workshop import editable_jsonl,summary
+        self.workshop_data=data
+        self.workshop_license.set_text(data['license'])
+        self.dataset_editor.get_buffer().set_text(editable_jsonl(data))
+        self.workshop_result.set_text(json.dumps(summary(data),indent=2,ensure_ascii=False))
+
+    def import_dataset(self):
+        from .workshop import import_file
+        dialog=Gtk.FileChooserDialog(title='Import labeled dataset',parent=self,action=Gtk.FileChooserAction.OPEN)
+        dialog.add_buttons('Cancel',Gtk.ResponseType.CANCEL,'Import',Gtk.ResponseType.OK)
+        if dialog.run()==Gtk.ResponseType.OK:
+            path=dialog.get_filename();license=self.workshop_license.get_text().strip();seed=self.split_seed.get_value_as_int()
+            self.workshop_result.set_text('Validating source, duplicates and split isolation…')
+            def done(data,error):
+                if error:self.workshop_result.set_text(error)
+                else:self.populate_workshop(data)
+            self.background(lambda:import_file(path,license,seed),done)
+        dialog.destroy()
+
+    def reviewed_dataset(self):
+        from .workshop import rows_from_text,prepare
+        buffer=self.dataset_editor.get_buffer()
+        text=buffer.get_text(buffer.get_start_iter(),buffer.get_end_iter(),True)
+        previous=self.workshop_data
+        data=prepare(rows_from_text(text,'jsonl'),self.workshop_license.get_text().strip(),
+                     previous.get('name','Reviewed dataset') if previous else 'Reviewed dataset',self.split_seed.get_value_as_int())
+        if previous:
+            from .data import digest
+            data['provenance']['parent_sha256']=digest(previous)
+        return data
+
+    def use_workshop(self):
+        try:
+            from .workshop import summary
+            data=self.reviewed_dataset();self.prepared_dataset=data;self.dataset_path=None
+            self.dataset_label.set_text(f"Reviewed {data['name']} · "+' / '.join(f'{len(data[k])} {k}' for k in ('train','validation','test')))
+            self.workshop_result.set_text('ACTIVE FOR NEXT EXPERIMENT · '+json.dumps(summary(data),indent=2))
+            self.message('Reviewed dataset selected. Configure the next experiment or export this version.')
+        except Exception as e:self.workshop_result.set_text(redact(str(e)))
+
+    def export_dataset(self):
+        from .workshop import export_version
+        try:data=self.reviewed_dataset()
+        except Exception as e:self.workshop_result.set_text(redact(str(e)));return
+        dialog=Gtk.FileChooserDialog(title='Export immutable dataset version (new filename)',parent=self,action=Gtk.FileChooserAction.SAVE)
+        dialog.add_buttons('Cancel',Gtk.ResponseType.CANCEL,'Export',Gtk.ResponseType.OK)
+        dialog.set_current_name('dataset-v1.json')
+        if dialog.run()==Gtk.ResponseType.OK:
+            try:self.workshop_result.set_text('Private dataset version saved: '+export_version(data,dialog.get_filename()))
+            except Exception as e:self.workshop_result.set_text(redact(str(e)))
+        dialog.destroy()
+
+    def system_tab(self):
+        c=self.page('05   Hardware & Models')
+        c.pack_start(label('Hardware reality checker.','title'),False,False,0)
+        c.pack_start(label('Live diagnostics; inference access and trainable checkpoints are separate capabilities. No model downloads or code execution.','subtitle',True),False,False,0)
+        c.pack_start(button('Refresh hardware diagnostics',self.refresh_hardware),False,False,0)
+        self.hardware_details=Gtk.TextView();self.hardware_details.set_editable(False);self.hardware_details.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        sc=scroll(self.hardware_details);sc.set_size_request(-1,260);c.pack_start(sc,True,True,0)
+        c.pack_start(button('Inspect local HF checkpoint directory…',self.inspect_local_model),False,False,0)
+        self.local_model_info=label('Select an existing HF-compatible directory to inspect architecture, tokenizer presence, safe weight files, storage, adapter metadata and license evidence. Use Configure for Ollama/API model discovery.','subtitle',True)
+        self.local_model_info.set_selectable(True);c.pack_start(self.local_model_info,False,False,0)
+
+    def refresh_hardware(self):
+        def done(h,error):
+            if error:self.hardware_details.get_buffer().set_text(error);return
+            self.hardware_details.get_buffer().set_text(json.dumps(h,indent=2))
+            if h.get('ram_mb'):self.hardware_label.set_text(f'{h["ram_mb"]/1024:.1f} GiB RAM · '+('NVIDIA driver detected' if h['gpu'] else 'CPU laboratory'))
+        self.background(lambda:inspect(self.store.root),done)
+
+    def inspect_local_model(self):
+        from .inventory import inspect_local
+        dialog=Gtk.FileChooserDialog(title='Inspect local model metadata',parent=self,action=Gtk.FileChooserAction.SELECT_FOLDER)
+        dialog.add_buttons('Cancel',Gtk.ResponseType.CANCEL,'Inspect',Gtk.ResponseType.OK)
+        if dialog.run()==Gtk.ResponseType.OK:
+            path=dialog.get_filename()
+            self.background(lambda:inspect_local(path),lambda result,error:self.local_model_info.set_text(error or json.dumps(result,indent=2)))
+        dialog.destroy()
+
+    def notebook_tab(self):
+        c=self.page('06   Notebook & Compare')
+        c.pack_start(label('Keep the evidence. Question the result.','title'),False,False,0)
+        c.pack_start(label('Markdown notes belong to the selected experiment. Comparisons read saved predictions; they make no new model calls. Repeated holdout use is exploratory.','subtitle',True),False,False,0)
+        self.note_editor=Gtk.TextView();self.note_editor.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        sc=scroll(self.note_editor);sc.set_size_request(-1,140);c.pack_start(sc,False,False,0)
+        c.pack_start(button('Save experiment notes',self.save_notes),False,False,0)
+        row=box(8,True);self.compare_left=Gtk.ComboBoxText();self.compare_right=Gtk.ComboBoxText()
+        row.pack_start(self.compare_left,True,True,0);row.pack_start(self.compare_right,True,True,0)
+        row.pack_start(button('Compare recorded results',self.compare_runs),False,False,0);c.pack_start(row,False,False,0)
+        c.pack_start(button('Inspect selected experiment failures',self.inspect_failures),False,False,0)
+        self.science_result=Gtk.TextView();self.science_result.set_editable(False);self.science_result.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        sc=scroll(self.science_result);sc.set_size_request(-1,240);c.pack_start(sc,True,True,0)
+        self.science_result.get_buffer().set_text('Select a completed experiment to inspect failures, or choose two completed runs to compare recorded accuracy and Wilson intervals. No measurements are available before a run completes.')
+        self.note_run=None;self.note_drafts={}
+
+    def load_notes(self):
+        if self.note_run==self.selected:return
+        if self.note_run:
+            buffer=self.note_editor.get_buffer()
+            self.note_drafts[self.note_run]=buffer.get_text(buffer.get_start_iter(),buffer.get_end_iter(),True)
+        self.note_run=self.selected
+        try:note=self.store.read(self.selected,'notebook.json')['markdown']
+        except FileNotFoundError:note=''
+        self.note_editor.get_buffer().set_text(self.note_drafts.get(self.selected,note))
+
+    def save_notes(self):
+        try:
+            if not self.selected:raise ValueError('Select an experiment first.')
+            buffer=self.note_editor.get_buffer();text=buffer.get_text(buffer.get_start_iter(),buffer.get_end_iter(),True)
+            if len(text)>100000:raise ValueError('Notes are limited to 100,000 characters.')
+            self.store.artifact(self.selected,'notebook.json',{'markdown':text,'updated':time.time()})
+            self.science_result.get_buffer().set_text('Notes saved privately for '+self.selected)
+        except Exception as e:self.science_result.get_buffer().set_text(redact(str(e)))
+
+    def compare_runs(self):
+        from .science import compare
+        try:
+            left,right=self.compare_left.get_active_id(),self.compare_right.get_active_id()
+            if not left or not right:raise ValueError('Choose two completed experiments.')
+            if left==right:raise ValueError('Choose distinct experiments.')
+            result=compare(self.store,left,right)
+            self.science_result.get_buffer().set_text(json.dumps(result,indent=2))
+        except Exception as e:self.science_result.get_buffer().set_text(redact(str(e)))
+
+    def inspect_failures(self):
+        from .science import failures
+        try:
+            if not self.selected:raise ValueError('Select a completed experiment first.')
+            result=failures(self.store.read(self.selected,'baseline-test.json'),self.store.read(self.selected,'candidate-test.json'))
+            self.science_result.get_buffer().set_text(json.dumps(result,indent=2,ensure_ascii=False))
+        except Exception as e:self.science_result.get_buffer().set_text(redact(str(e)))
 
     def open_terminal(self):
         from .terminal import open_terminal
@@ -223,6 +390,7 @@ class Desktop(Gtk.Window):
 
     def message(self,text):
         self.status.set_text(text)
+        self.sidebar_status.set_text(text)
 
     def background(self,work,done):
         def task():
@@ -278,7 +446,7 @@ class Desktop(Gtk.Window):
         if dialog.run()==Gtk.ResponseType.OK:
             path=dialog.get_filename()
             try:
-                data=load(path);self.dataset_path=path
+                data=load(path);self.dataset_path=path;self.prepared_dataset=None
                 self.dataset_label.set_text(f'{Path(path).name} · {data["license"]} · '+ ' / '.join(f'{len(data[k])} {k}' for k in ('train','validation','test')))
             except Exception as e:self.message(redact(str(e)))
         dialog.destroy()
@@ -299,7 +467,7 @@ class Desktop(Gtk.Window):
         self.checkpoint_path=None;self.checkpoint_label.set_text('Fresh CPU classifier · no pretrained knowledge')
 
     def reset_dataset(self):
-        self.dataset_path=None;self.dataset_label.set_text('Support routing v1 · CC0 · 80 training / 24 validation / 40 held-out examples')
+        self.prepared_dataset=None;self.dataset_path=None;self.dataset_label.set_text('Support routing v1 · CC0 · 80 training / 24 validation / 40 held-out examples')
 
     def run_new(self):
         try:
@@ -313,14 +481,14 @@ class Desktop(Gtk.Window):
                 c['cloud'].update(authorized=self.cloud_authorized.get_active(),data_sharing=self.cloud_sharing.get_active())
             if (c['mentor']['kind']!='controller' or c['student']['kind']!='linear') and not self.consent.get_active():
                 raise ValueError('Enable the local dataset-sharing permission before connecting an external model server.')
-            c=config_checked(c);dataset=load(self.dataset_path)
-            rid=self.store.create(c,dataset);self.selected=rid;self.manager.start(rid)
+            c=config_checked(c);dataset=self.prepared_dataset or load(self.dataset_path)
+            rid=self.store.create(c,dataset);self.selected=rid;self.load_notes();self.manager.start(rid)
             self.tabs.set_current_page(1);self.message('Experiment started.');self.tick()
         except Exception as e:self.message(redact(str(e)))
 
     def new(self):self.tabs.set_current_page(0)
     def history_selected(self,_,row):
-        if row:self.selected=row.rid;self.last_events=None;self.refresh_run();self.show_artifact()
+        if row:self.selected=row.rid;self.last_events=None;self.refresh_run();self.show_artifact();self.load_notes()
     def pause(self):self.manager.pause();self.tick()
     def resume(self):
         try:
@@ -341,10 +509,15 @@ class Desktop(Gtk.Window):
                 row=Gtk.ListBoxRow();row.rid=r['id'];b=box(4);b.set_border_width(10)
                 b.pack_start(label(r['id']),False,False,0);b.pack_start(label(r['status'].upper(),'subtitle'),False,False,0);row.add(b);self.history.add(row)
             self.history.show_all()
+            for choice in (self.compare_left,self.compare_right):
+                current=choice.get_active_id();choice.remove_all()
+                for r in runs:
+                    if r['status']=='completed':choice.append(r['id'],r['id'])
+                if current:choice.set_active_id(current)
         self.refresh_run()
-        if time.monotonic()-self.last_hardware>8:
+        if time.monotonic()-self.last_hardware>30:
             self.last_hardware=time.monotonic()
-            self.background(inspect,lambda h,e:self.hardware_label.set_text(f'{h["ram_mb"]//1024} GB RAM  ·  '+('NVIDIA available' if h['gpu'] else 'CPU · NVIDIA unavailable')) if h and h.get('ram_mb') else None)
+            self.refresh_hardware()
         return True
 
     def refresh_run(self):
@@ -368,10 +541,31 @@ class Desktop(Gtk.Window):
             self.last_events=sig
             self.journal.get_buffer().set_text('\n\n'.join(f'{time.strftime("%H:%M:%S",time.localtime(e["time"]))}  {e["kind"].upper()}\n{inspection_summary(cfg['student'],s.get('student_info',{})) if e['kind']=='inspection' else e['message']}' for e in events))
             self.show_artifact()
+            from .science import loss_chart
+            try:chart=loss_chart(self.store.read(self.selected,'training-metrics.json'))
+            except FileNotFoundError:chart=None
+            if chart:
+                loader=GdkPixbuf.PixbufLoader.new_with_type('svg');loader.write(chart.encode());loader.close()
+                self.loss_image.set_from_pixbuf(loader.get_pixbuf())
+            else:self.loss_image.clear()
         if report:
             self.verification.set_text(('PROMOTED' if report['promoted'] else 'NOT PROMOTED')+f' · {report["baseline_accuracy"]:.1%} → {report["candidate_accuracy"]:.1%} · paired p = {report["p_one_sided"]:.5f}\n'+report['policy']+'\n'+report['scope'])
         else:self.verification.set_text('No final evidence yet. Validation measurements are used for selection; held-out results decide promotion.')
         self.artifact_label.set_text('Artifact directory: '+str(self.store.root/self.selected))
+
+    def export_evidence_bundle(self):
+        from .bundle import export_bundle
+        if not self.selected:self.message('Select a completed experiment first.');return
+        if self.store.get(self.selected)['status']!='completed':self.message('Wait for the experiment to finish before exporting evidence.');return
+        dialog=Gtk.FileChooserDialog(title='Export evidence ZIP (dataset text and weights excluded; review notes before sharing)',parent=self,action=Gtk.FileChooserAction.SAVE)
+        dialog.add_buttons('Cancel',Gtk.ResponseType.CANCEL,'Export',Gtk.ResponseType.OK)
+        dialog.set_current_name('gafaw-'+self.selected+'.zip')
+        if dialog.run()==Gtk.ResponseType.OK:
+            try:
+                export_bundle(self.store,self.selected,dialog.get_filename())
+                self.message('Private evidence exported. Inspect notes and configuration before sharing.')
+            except Exception as e:self.message(redact(str(e)))
+        dialog.destroy()
 
     def show_artifact(self):
         if not self.selected:return
