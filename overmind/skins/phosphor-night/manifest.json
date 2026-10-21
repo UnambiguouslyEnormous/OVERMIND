@@ -1,0 +1,28 @@
+{
+  "format": "gafaw.skin.v1",
+  "id": "phosphor-night",
+  "name": "Phosphor Night",
+  "version": "1.0.0",
+  "author": "GAFAW contributors",
+  "license": "MIT",
+  "description": "A quiet ink-blue laboratory with amber instrument readouts. Texture-free alternative.",
+  "font": {"family": "DejaVu Sans", "size": 13},
+  "colors": {"background": "#101822", "text": "#e5edf5", "muted": "#bac8d8", "accent": "#ffd58a", "focus": "#ffdb99"},
+  "surfaces": {
+    "header": {"background": "#172738"},
+    "sidebar": {"background": "#172738"},
+    "panel": {"gradient": ["#293b50", "#1a293b"], "border": "#60768e"},
+    "metric": {"background": "#0b1620", "foreground": "#ffd58a", "border": "#668194"},
+    "button": {"gradient": ["#435d78", "#263b52"], "border": "#7b91ab"},
+    "button_hover": {"gradient": ["#5a7696", "#354f6d"]},
+    "button_active": {"background": "#243a50"},
+    "button_primary": {"gradient": ["#806438", "#51401f"], "foreground": "#fff1d6"},
+    "button_disabled": {"background": "#263240", "foreground": "#9eafc0"},
+    "input": {"background": "#0d1926", "foreground": "#e5edf5"},
+    "notebook": {"background": "#172738"},
+    "tab_active": {"background": "#2b4057", "foreground": "#ffdb99"},
+    "list_selected": {"background": "#354c63"},
+    "progress": {"gradient": ["#ffd58a", "#b88a40"]},
+    "selection": {"background": "#5c502d", "foreground": "#ffffff"}
+  }
+}

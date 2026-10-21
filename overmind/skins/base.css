@@ -1,18 +1,18 @@
 * { font-family: "DejaVu Sans", sans-serif; font-size: 13px; }
 window { background: #181d20; color: #e0e8e9; }
-headerbar { background-image: url("assets/titanium.svg"); border-bottom: 2px solid #050808; box-shadow: inset 0 1px #7b858b; padding: 9px; }
+headerbar {  border-bottom: 2px solid #050808; box-shadow: inset 0 1px #7b858b; padding: 9px; }
 headerbar .title { color: #eef5f4; font-weight: bold; letter-spacing: 3px; }
-.sidebar { background-image: url("assets/titanium.svg"); border-right: 2px solid #080c0e; padding: 18px; box-shadow: inset -1px 0 #546168; }
+.sidebar {  border-right: 2px solid #080c0e; padding: 18px; box-shadow: inset -1px 0 #546168; }
 .title { font-size: 28px; font-weight: bold; color: #f0f4ef; }
 .subtitle { color: #b4c2c5; font-size: 12px; }
 .brand { font-size: 30px; letter-spacing: 5px; font-weight: bold; color: #ddede6; text-shadow: 0 2px #000; }
 .eyebrow { font-size: 11px; font-weight: bold; color: #abcfb5; letter-spacing: 1px; }
 .card { background-image: linear-gradient(to bottom, #30383d, #20272b); border: 1px solid #080c0e; border-top-color: #66757c; border-left-color: #4b585e; border-radius: 4px; padding: 18px; box-shadow: 0 2px 3px alpha(#000, .3); }
-.metric { background-image: url("assets/lcd.svg"); background-size: cover; border: 2px solid #080f0b; border-bottom-color: #566359; padding: 12px; font-family: "DejaVu Sans Mono", monospace; font-size: 27px; font-weight: bold; color: #9af7ab; text-shadow: 0 0 3px alpha(#6aff8f, .4); }
+.metric {  background-size: cover; border: 2px solid #080f0b; border-bottom-color: #566359; padding: 12px; font-family: "DejaVu Sans Mono", monospace; font-size: 27px; font-weight: bold; color: #9af7ab; text-shadow: 0 0 3px alpha(#6aff8f, .4); }
 button { background-image: linear-gradient(to bottom, #59646a, #343e44 48%, #293238 51%, #38434a); border: 1px solid #080c0e; border-top-color: #89979d; border-left-color: #6a797e; color: #f0f4f3; border-radius: 3px; padding: 9px 13px; text-shadow: 0 1px #000; box-shadow: 0 1px 2px alpha(#000, .4); }
 button:hover { background-image: linear-gradient(to bottom, #687c7d, #425753 48%, #30473c 51%, #435d4b); border-top-color: #b4cfb9; }
 button:active, button:checked { background-image: linear-gradient(to bottom, #172721, #3a5142); border-color: #111b15; }
-button:disabled { background-image: none; background-color: #2b3135; color: #829095; text-shadow: none; box-shadow: none; }
+button:disabled, button.primary:disabled, button.danger:disabled { background-image: none; background-color: #2b3135; color: #829095; text-shadow: none; box-shadow: none; }
 button:focus, entry:focus, spinbutton:focus, combobox:focus { outline: 2px solid #b4f5b0; outline-offset: 2px; }
 button.primary { background-image: linear-gradient(to bottom, #617f5b, #395635 48%, #263e29 51%, #3e5b3a); color: #e9ffda; border-top-color: #b6cf98; font-weight: bold; }
 button.danger { background-image: linear-gradient(to bottom, #765050, #482c2e); color: #ffe0d8; }
@@ -20,7 +20,7 @@ entry, spinbutton, combobox button, textview text { background-color: #10191a; c
 entry, spinbutton { border-radius: 2px; padding: 8px; box-shadow: inset 0 1px 2px #000; }
 textview { background-color: #10191a; padding: 14px; }
 textview text { font-family: "DejaVu Sans Mono", monospace; font-size: 12px; }
-notebook header { background-image: url("assets/titanium.svg"); border-bottom: 2px solid #090e0f; }
+notebook header {  border-bottom: 2px solid #090e0f; }
 notebook tab { padding: 12px 14px; color: #b7c3c4; border-right: 1px solid #101719; }
 notebook tab:checked { color: #c5ffb7; background-image: linear-gradient(to bottom, #3b4948, #212b28); border-bottom: 3px solid #91d89a; }
 list, list row { background: transparent; color: #dce5e3; }

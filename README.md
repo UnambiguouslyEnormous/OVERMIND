@@ -39,7 +39,7 @@ Optional GPU acceleration: When using locally hosted LLMs through Ollama or anot
 
 ## Black Titanium laboratory
 
-The original GTK 3 desktop now has a procedurally generated brushed-metal skin, beveled native controls, green LCD measurements, and an original flask emblem. Regenerate the dependency-free SVG artwork with `python3 tools/generate_skin.py`. **Open Terminal Here** (Ctrl+Shift+T) opens the selected experiment directory with a sanitized environment.
+The original GTK 3 desktop now has a reusable [Skin Library](docs/skins.md) with live switching, validated `.gafawskin` import/export, Black Titanium as its default, and Phosphor Night as a second built-in. Black Titanium has a procedurally generated brushed-metal skin, beveled native controls, green LCD measurements, and an original flask emblem. Regenerate the dependency-free SVG artwork with `python3 tools/generate_skin.py`. **Open Terminal Here** (Ctrl+Shift+T) opens the selected experiment directory with a sanitized environment.
 
 - **Dataset Workshop:** review/edit labeled JSONL, CSV, TSV, or tab-separated TXT; deduplicate before reproducible stratified splits; preserve explicit splits; export private immutable JSON versions.
 - **Hardware & Models:** actual CPU/RAM/disk/driver diagnostics, conservative precision guidance, optional dependency status, and local HF checkpoint metadata inspection without running model code.

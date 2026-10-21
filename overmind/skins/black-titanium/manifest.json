@@ -1,0 +1,17 @@
+{
+  "format": "gafaw.skin.v1",
+  "id": "black-titanium",
+  "name": "Black Titanium",
+  "version": "1.0.0",
+  "author": "GAFAW contributors",
+  "license": "MIT",
+  "description": "Original brushed gunmetal, beveled controls and green phosphor readouts.",
+  "font": {"family": "DejaVu Sans", "size": 13},
+  "colors": {"background": "#181d20", "text": "#e0e8e9", "muted": "#b4c2c5", "accent": "#9af7ab", "focus": "#b4f5b0"},
+  "surfaces": {
+    "header": {"texture": "assets/titanium.svg"},
+    "sidebar": {"texture": "assets/titanium.svg"},
+    "notebook": {"texture": "assets/titanium.svg"},
+    "metric": {"texture": "assets/lcd.svg"}
+  }
+}

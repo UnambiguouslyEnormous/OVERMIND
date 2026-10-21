@@ -53,3 +53,5 @@ secrets.env
 /lab-data-*/
 # Store also writes a private ignore marker inside every laboratory directory.
 /docs/evidence/
+# Locally installed declarative skins and selection.
+/skin-library/

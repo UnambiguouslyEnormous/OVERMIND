@@ -9,4 +9,4 @@ overmind = "overmind.__main__:main"
 gafaw = "overmind.__main__:main"
 
 [tool.setuptools.package-data]
-overmind = ["*.css", "assets/*.svg"]
+overmind = ["assets/*.svg", "skins/*.css", "skins/*/manifest.json", "skins/*/assets/*.svg", "skins/*/assets/*.png"]

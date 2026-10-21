@@ -16,3 +16,5 @@ The [Qwen](../examples/qwen-prompt-result.json) and [classifier](../examples/cla
 See [CONTRIBUTING.md](../CONTRIBUTING.md), the [MIT code license](../LICENSE), and the benchmark's [CC0 notice](../DATA_LICENSE.md).
 
 - [GAFAW Black Titanium workflows and current implementation status](gafaw.md)
+
+- [Skin Library and community skin manifest/package format](skins.md)

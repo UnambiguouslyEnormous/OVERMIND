@@ -78,6 +78,8 @@ The desktop exports minimized evidence: configuration, available reports/metrics
 
 ## Theme and terminal
 
+The reusable [Skin Library](skins.md) supports multiple local skins, live switching with saved preference, and validated `.gafawskin` import/export. Black Titanium remains the default; Phosphor Night is a second built-in. Skin textures and manifests are separate from application logic.
+
 The dependency-free `tools/generate_skin.py` generates original brushed titanium, phosphor LCD, and flask-emblem SVGs. GTK CSS supplies beveled normal/hover/pressed/disabled controls, inset surfaces, visible focus, and real progress widgets. These are native keyboard-operable GTK controls, not a background screenshot. No Winamp assets are used. Manual HiDPI/accessibility/resizing acceptance remains pending.
 
 Open Terminal Here / Ctrl+Shift+T opens the selected experiment directory, or laboratory root when none is selected. It uses a subprocess argument list, a working directory, and an allowlisted environment which retains desktop transport variables but strips API credentials. If no supported terminal is installed, a permanent sidebar status displays the directory for manual use. Opening a terminal depends on the user's desktop/session and terminal installation; terminal subprocess invocation has fixture coverage, not a claim of testing every terminal emulator.

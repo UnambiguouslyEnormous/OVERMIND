@@ -15,6 +15,7 @@ from .model import TextStudent
 from .providers import provider, inspection_summary
 from .security import register, redact, clear_credentials, harden_process
 from .ollama import discover
+from .skins import SkinLibrary, PreparedSkin, export_package
 
 
 def label(text,style=None,wrap=False):
@@ -38,14 +39,19 @@ def entry(text=''):
     w=Gtk.Entry();w.set_text(text);return w
 
 class Desktop(Gtk.Window):
-    def __init__(self,root):
+    def __init__(self,root,skin_root=None):
         super().__init__(title='GAFAW — The Free, Open-Source AI Laboratory')
         self.set_default_size(1280,900);self.set_size_request(980,700)
         self.manager=Manager(root);self.store=self.manager.store
         self.selected=None;self.prepared_dataset=None;self.dataset_path=None;self.checkpoint_path=None;self.history_signature=None;self.last_events=None;self.last_hardware=0
         self.connect('delete-event',self.close)
-        css=Gtk.CssProvider();css.load_from_path(str(Path(__file__).with_name('titanium.css')))
-        Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(),css,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        self.skin_library=SkinLibrary(skin_root or Path(__file__).resolve().parent.parent/'skin-library')
+        self.skin_provider=None;self.prepared_skin=None;self.skin_id=None
+        self.connect('destroy',lambda *_:self.release_skin())
+        self.skin_startup_error=None
+        try:self.activate_skin(self.skin_library.selected(),persist=False)
+        except Exception as error:
+            self.skin_startup_error=redact(str(error));self.activate_skin('black-titanium',persist=False)
         header=Gtk.HeaderBar();header.set_show_close_button(True);header.set_title('GAFAW')
         header.set_subtitle(f'The Free, Open-Source AI Laboratory  /  {DISPLAY_VERSION}')
         self.hardware_label=label('Detecting hardware…','subtitle');header.pack_end(self.hardware_label)
@@ -71,10 +77,103 @@ class Desktop(Gtk.Window):
         self.sidebar_status=label('','subtitle',True);self.sidebar_status.set_max_width_chars(30)
         side.pack_start(self.sidebar_status,False,False,0)
         self.tabs=Gtk.Notebook();self.tabs.set_scrollable(True);layout.pack_start(self.tabs,True,True,0)
-        self.setup_tab();self.live_tab();self.evidence_tab();self.workshop_tab();self.system_tab();self.notebook_tab()
+        self.setup_tab();self.live_tab();self.evidence_tab();self.workshop_tab();self.system_tab();self.notebook_tab();self.skins_tab()
         self.status=label('Ready. The built-in experiment needs no downloads.','subtitle',True)
         self.setup_content.pack_end(self.status,False,False,0)
+        if self.skin_startup_error:self.message('Using Black Titanium: '+self.skin_startup_error)
         self.tick();GLib.timeout_add(500,self.tick)
+
+    def activate_skin(self,identifier,persist=True):
+        skin=self.skin_library.get(identifier)
+        prepared=PreparedSkin(skin)
+        try:
+            candidate=Gtk.CssProvider();candidate.load_from_data(prepared.css)
+            if persist:self.skin_library.select(identifier)
+        except Exception:
+            prepared.close();raise
+        previous_provider,previous_skin=self.skin_provider,self.prepared_skin
+        Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(),candidate,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        self.skin_provider=candidate;self.prepared_skin=prepared;self.skin_id=identifier
+        if previous_provider:Gtk.StyleContext.remove_provider_for_screen(Gdk.Screen.get_default(),previous_provider)
+        if previous_skin:previous_skin.close()
+        return skin
+
+    def release_skin(self):
+        if self.skin_provider:
+            Gtk.StyleContext.remove_provider_for_screen(Gdk.Screen.get_default(),self.skin_provider);self.skin_provider=None
+        if self.prepared_skin:self.prepared_skin.close();self.prepared_skin=None
+
+    def skins_tab(self):
+        c=self.page('07   Skin Library')
+        c.pack_start(label('Dress the laboratory. Keep the science.','title'),False,False,0)
+        c.pack_start(label('Switch skins live. Local .gafawskin packages contain validated JSON and static SVG/PNG assets. No code, raw CSS, external resources or downloads.','subtitle',True),False,False,0)
+        self.skin_choice=Gtk.ComboBoxText();self.skin_choice.connect('changed',lambda *_:self.skin_details())
+        c.pack_start(self.skin_choice,False,False,0)
+        self.skin_info=label('','subtitle',True);self.skin_info.set_selectable(True);c.pack_start(self.skin_info,False,False,0)
+        row=box(8,True)
+        row.pack_start(button('Apply selected skin',self.apply_selected_skin,'primary'),False,False,0)
+        row.pack_start(button('Restore Black Titanium',self.restore_skin),False,False,0)
+        c.pack_start(row,False,False,0)
+        row=box(8,True)
+        row.pack_start(button('Import .gafawskin…',self.import_skin),False,False,0)
+        row.pack_start(button('Export selected skin…',self.export_skin),False,False,0)
+        row.pack_start(button('Refresh library',self.refresh_skins),False,False,0)
+        c.pack_start(row,False,False,0)
+        self.skin_status=label('','subtitle',True);self.skin_status.set_selectable(True);c.pack_start(self.skin_status,False,False,0)
+        c.pack_start(label('Community authors can export a skin as a starting point, edit manifest.json, give it a new id and repackage it. Font files and arbitrary widget/layout overrides are intentionally unsupported. Contrast remains the author’s responsibility; the engine preserves focus rings and native controls.','subtitle',True),False,False,0)
+        self.refresh_skins()
+
+    def refresh_skins(self,selected=None):
+        try:
+            skins,errors=self.skin_library.list()
+            current=selected or self.skin_choice.get_active_id() or self.skin_id
+            self.skin_choice.remove_all()
+            for skin in skins:self.skin_choice.append(skin.id,skin.manifest['name']+(' · built-in' if skin.builtin else ' · installed'))
+            self.skin_choice.set_active_id(current)
+            self.skin_status.set_text('Active: '+self.skin_id+' · Library: '+str(self.skin_library.root)+('\nRejected packages: '+'; '.join(errors) if errors else ''))
+        except Exception as error:self.skin_status.set_text(redact(str(error)))
+
+    def skin_details(self):
+        identifier=self.skin_choice.get_active_id()
+        if not identifier:return
+        try:
+            skin=self.skin_library.get(identifier);m=skin.manifest
+            self.skin_info.set_text(f"{m['name']} · v{m['version']} · {m['author']} · {m['license']}\n{m.get('description','')}\n{len(skin.assets)} static assets · "+('Built-in' if skin.builtin else 'Installed locally'))
+        except Exception as error:self.skin_info.set_text(redact(str(error)))
+
+    def apply_selected_skin(self):
+        try:
+            identifier=self.skin_choice.get_active_id()
+            if not identifier:raise ValueError('Select a skin first.')
+            self.activate_skin(identifier)
+            self.skin_status.set_text('Active: '+identifier+' · saved for next launch. No experiment or data changed.')
+        except Exception as error:self.skin_status.set_text('Previous skin retained: '+redact(str(error)))
+
+    def restore_skin(self):
+        self.skin_choice.set_active_id('black-titanium');self.apply_selected_skin()
+
+    def import_skin(self):
+        dialog=Gtk.FileChooserDialog(title='Import validated .gafawskin package',parent=self,action=Gtk.FileChooserAction.OPEN)
+        dialog.add_buttons('Cancel',Gtk.ResponseType.CANCEL,'Import',Gtk.ResponseType.OK)
+        filter=Gtk.FileFilter();filter.set_name('GAFAW skins');filter.add_pattern('*.gafawskin');dialog.add_filter(filter)
+        if dialog.run()==Gtk.ResponseType.OK:
+            try:
+                skin=self.skin_library.install(dialog.get_filename());self.refresh_skins(skin.id)
+                self.skin_status.set_text('Installed '+skin.manifest['name']+'. Choose Apply selected skin to activate it.')
+            except Exception as error:self.skin_status.set_text('Import rejected: '+redact(str(error)))
+        dialog.destroy()
+
+    def export_skin(self):
+        try:skin=self.skin_library.get(self.skin_choice.get_active_id())
+        except Exception as error:self.skin_status.set_text(redact(str(error)));return
+        dialog=Gtk.FileChooserDialog(title='Export skin package (new filename)',parent=self,action=Gtk.FileChooserAction.SAVE)
+        dialog.add_buttons('Cancel',Gtk.ResponseType.CANCEL,'Export',Gtk.ResponseType.OK)
+        dialog.set_current_name(skin.id+'.gafawskin')
+        if dialog.run()==Gtk.ResponseType.OK:
+            try:
+                export_package(skin,dialog.get_filename());self.skin_status.set_text('Skin exported. Custom forks need a new manifest id before import.')
+            except Exception as error:self.skin_status.set_text(redact(str(error)))
+        dialog.destroy()
 
     def page(self,title):
         content=box(18);content.set_border_width(26)
