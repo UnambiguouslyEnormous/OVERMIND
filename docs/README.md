@@ -14,3 +14,5 @@ Guides for **v0.2.0-beta.1**. Start at the [project overview](../README.md).
 The [Qwen](../examples/qwen-prompt-result.json) and [classifier](../examples/classifier-result.json) summaries contain sanitized measured evidence. Provider fixtures test integration, not model improvement. Raw laboratory artifacts and datasets remain local and excluded from the public checkout.
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md), the [MIT code license](../LICENSE), and the benchmark's [CC0 notice](../DATA_LICENSE.md).
+
+- [GAFAW Black Titanium workflows and current implementation status](gafaw.md)

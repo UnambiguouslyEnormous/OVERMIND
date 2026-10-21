@@ -1,16 +1,25 @@
-# OVERMIND
+# GAFAW
 
-**Teach. Test. Verify.** A native Linux laboratory for AI experiments you can inspect.
+**The Free, Open-Source AI Laboratory**
+
+**Teach. Test. Verify. Evolve.**
+
+<details>
+<summary>Why the name?</summary>
+
+**Great, Another Fucking AI Workbench.** Because apparently the world needed one more.
+
+</details>
 
 [![Beta: v0.2.0-beta.1](https://img.shields.io/badge/beta-v0.2.0--beta.1-5266b8)](docs/beta-release.md)
 [![Python: 3.12+](https://img.shields.io/badge/python-3.12%2B-3776ab)](docs/installation.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2b7765)](LICENSE)
 
-OVERMIND brings training, evaluation, and experiment evidence into one GTK desktop. Train a small text classifier on your CPU, or connect an LLM and explore prompt improvements. Compare the original student with a frozen candidate on held-out examples, then see exactly why promotion passed or failed.
+GAFAW brings training, evaluation, and experiment evidence into one GTK desktop. Train a small text classifier on your CPU, or connect an LLM and explore prompt improvements. Compare the original student with a frozen candidate on held-out examples, then see exactly why promotion passed or failed.
 
 Start with the built-in classifier: **no model download, GPU, API key, or paid service required**. Optional local and cloud mentors can guide bounded experiments when you choose to connect them.
 
-Optional GPU acceleration: When using locally hosted LLMs through Ollama or another compatible inference engine, OVERMIND can benefit from GPU acceleration provided by that engine. The built-in classifier currently trains on the CPU.
+Optional GPU acceleration: When using locally hosted LLMs through Ollama or another compatible inference engine, GAFAW can benefit from GPU acceleration provided by that engine. The built-in classifier currently trains on the CPU.
 
 **v0.2.0-beta.1 · Linux source-checkout beta.** Ubuntu 24.04 and compatible Pop!_OS installations are the primary targets. Other distributions have not been tested. Interactive desktop acceptance remains pending; see the [beta verification notes](docs/beta-release.md).
 
@@ -28,7 +37,26 @@ Optional GPU acceleration: When using locally hosted LLMs through Ollama or anot
 - **Connect optional mentors:** use Ollama, a local OpenAI-compatible engine, or explicitly authorized OpenAI/Anthropic cloud mentoring.
 - **Set boundaries:** choose wall time, worker memory, inference-call limits, and cloud budget. Pause or stop the desktop worker and reopen saved evidence.
 
+## Black Titanium laboratory
+
+The original GTK 3 desktop now has a procedurally generated brushed-metal skin, beveled native controls, green LCD measurements, and an original flask emblem. Regenerate the dependency-free SVG artwork with `python3 tools/generate_skin.py`. **Open Terminal Here** (Ctrl+Shift+T) opens the selected experiment directory with a sanitized environment.
+
+- **Dataset Workshop:** review/edit labeled JSONL, CSV, TSV, or tab-separated TXT; deduplicate before reproducible stratified splits; preserve explicit splits; export private immutable JSON versions.
+- **Hardware & Models:** actual CPU/RAM/disk/driver diagnostics, conservative precision guidance, optional dependency status, and local HF checkpoint metadata inspection without running model code.
+- **Training evidence:** real SGD step counts, changed-parameter fingerprints, selected-checkpoint reload verification, recorded loss/gradient/throughput metrics, and an actual loss chart. Zero-update training is rejected.
+- **Notebook & Compare:** per-experiment Markdown notes, paired failure/regression examples, recorded run comparisons with Wilson accuracy intervals, and private evidence bundles with checksums.
+
+Existing `overmind` module/command, `./run.sh`, laboratory markers, database schema, saved classifier format, license, and remote URL remain compatible. New runs carry additional evidence; legacy runs can still be viewed and restored. Legacy runs without complete integrity evidence cannot earn fresh verified promotion on recovery.
+
+Read the [GAFAW workflow and implementation status](docs/gafaw.md) for file schemas, CLI commands, tested scope, and unfinished backlog. Generative LoRA/SFT, remote workers, and distributed training are **not implemented** in this release.
+
 ## Screenshots
+
+[![GAFAW Black Titanium Laboratory with real CPU training measurements and recorded loss](docs/screenshots/gafaw-laboratory.png)](docs/screenshots/gafaw-laboratory.png)
+
+*Current native GTK widgets, captured offscreen without the header/window decorations. Temporary two-epoch CPU smoke: 25.0% baseline → 52.5% candidate held-out accuracy on 40 examples. This illustrates the workflow, not a general model-quality or promotion claim.*
+
+The following captures document the earlier OVERMIND interface; the current desktop uses the Black Titanium theme described above.
 
 | Configure | Experiment controls |
 | --- | --- |
@@ -92,7 +120,7 @@ Read the [sanitized result](examples/qwen-prompt-result.json) and [verification 
 
 ## Connect actual local models
 
-**Ollama is optional.** Install and provision it separately using the [official Linux guide](https://docs.ollama.com/linux). OVERMIND does not install its service or download models. With your server running and a licensed model already installed:
+**Ollama is optional.** Install and provision it separately using the [official Linux guide](https://docs.ollama.com/linux). GAFAW does not install its service or download models. With your server running and a licensed model already installed:
 
 ```bash
 ./run.sh ollama
@@ -105,7 +133,7 @@ In the desktop, select **Ollama**, use `http://127.0.0.1:11434`, discover an ins
 
 ## Update an existing installation
 
-Stop active experiments, close OVERMIND, and back up your laboratory directory. From a clean Git-cloned checkout:
+Stop active experiments, close GAFAW, and back up your laboratory directory. From a clean Git-cloned checkout:
 
 ```bash
 cd OVERMIND
@@ -122,7 +150,7 @@ Review and commit or safely set aside source edits first. If Git reports diverge
 | --- | --- |
 | `No module named gi` | Use system Python outside a virtual environment; install the GTK packages above. |
 | GTK cannot open a display | Launch in a normal logged-in desktop session; use `./run.sh run` for terminal-only experiments. |
-| Laboratory directory is rejected | Select a dedicated empty directory or recognized OVERMIND laboratory; keep existing data intact. |
+| Laboratory directory is rejected | Select a dedicated empty directory or recognized GAFAW / legacy OVERMIND laboratory; keep existing data intact. |
 | Ollama cannot connect | Check the separately managed server and installed model with `./run.sh ollama`. |
 | Cloud generation is blocked | Check authorization, budget/rates, credentials, and model compatibility in the [cloud guide](docs/user-guide.md#cloud-mentors). |
 
@@ -130,7 +158,7 @@ More details: [troubleshooting](docs/user-guide.md#troubleshooting) · [mentor r
 
 ## Limits and beta status
 
-This beta evaluates exact-label text classification. It does not implement generative-model LoRA/QLoRA/SFT, automatic continual learning, semantic/vector RAG, or general intelligence training. Retrieval uses lexical matching. Anthropic, retrieval, and several provider paths have fixture coverage without a published live improvement result. A fresh desktop acceptance check remains outstanding.
+This beta evaluates exact-label text classification. Imported datasets must use the same labeled classification schema. It does not implement generative-model LoRA/QLoRA/SFT, automatic continual learning, semantic/vector RAG, or general intelligence training. Retrieval uses lexical matching. Anthropic, retrieval, and several provider paths have fixture coverage without a published live improvement result. An automated GTK exercise now covers dataset review, a real CPU worker, integrity evidence, the loss chart, failure inspection, and notes. Manual accessibility, HiDPI, resizing, and physical GPU acceptance remain outstanding.
 
 Worker limits do not constrain a separate inference server's resources. Experiment files are private by filesystem permissions but unencrypted. Cloud dispatch sends explicitly authorized context; the built-in path has no telemetry or automatic uploads. The held-out split is not a security boundary against a malicious local engine. See [runtime boundaries](docs/security.md#worker-and-inference-boundaries), [security protections](docs/security.md), and the [full capability status](docs/experiments.md#capability-status).
 
